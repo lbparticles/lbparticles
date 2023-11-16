@@ -1331,6 +1331,79 @@ def getCartesianFromPolar( xpol, vpol ):
 
     return (x,y,z), (vx,vy,w)
 
+# handle time/accounting - refer the querier to the correct unperturbedParticle solution, i.e. where the particle is on its epicycle.
+class perturbedParticle:
+    def __init__(self):
+        self.stitchedSolutions = [] # each element i is the particle's trajectory from time ts[i] to ts[i+1]
+        self.ts = []
+    def add(self, t, part):
+        self.ts.append( t )
+        self.stitchedSolutions.append( part )
+    def exists(self, t):
+        # check whether the particle has been produced yet
+        return t>self.ts[0]
+    def getpart(self, t):
+        i = np.searchsorted( self.ts, t, side='left' ) 
+        return self.ts[i-1], self.stitchedSolutions[i-1]
+    def xabs(self, t):
+        if self.exists(t):
+            tref, part = self.getpart(t)
+            return part.xabs(t-tref)
+        else:
+            assert False
+
+
+def findClosestApproach( orb1, orb2, tmin ):
+    # Find the /first/ local minimum in the distance between orb1 and orb2 /after/ tmin.
+    # orb1 and orb2 
+    def dist2(t):
+        assert t>=tmin
+        trefOrb1, solnOrb1 = orb1.getpart( t )
+        trefOrb2, solnOrb2 = orb2.getpart( t )
+
+        xcart1 = np.array(solnOrb1.xabs(t-trefOrb1))
+        xcart2 = np.array(solnOrb2.xabs(t-trefOrb2))
+        return np.sum((xcart1-xcart2)**2)
+
+    # this may be the stupidest algorithm I've ever implemented
+
+    ts = np.linspace( tmin+0.001, tmin + 1.0/orb1.stitchedSolutions[0].Omega + 1.0/orb2.stitchedSolutions[0].Omega, 1000)
+    ds = np.array(ts.shape)
+    for i,t in enumerate(ts):
+        ds[i] = dist2(t)
+
+    ii = np.argmin(ds)
+    assert ii!=0 and ii!=len(ts)-1 # pathological cases that I'm sure we'll encounter
+
+    res = scipy.optimize.minimize_scalar( dist2, bracket=(ts[ii-1], ts[ii+1]) )
+    return res.x
+
+def applyPerturbation( orbISO, orbStar, tPerturb, mstar ):
+    # Assume tPerturb is the relevant time of closest approach. The ISO, whose 'perturbedParticle' orbit
+    
+    trefISO, solnISO = orbISO.getpart( tPerturb )
+    trefStar, solnStar = orbStar.getpart( tPerturb )
+
+    xcartStar = solnStar.xabs(tPerturb-trefStar)
+    vcartStar = solnStar.vabs(tPerturb-trefStar)
+
+    xcartISO = solnISO.xabs(tPerturb-trefISO)
+    vcartISO = np.array(solnISO.vabs(tPerturb-trefISO))
+
+    # initial
+    vrel = np.array(vcartISO) - np.array(vcartStar)
+    xrel = np.array(xcartISO) - np.array(xcartStar)
+
+    b = np.sqrt( np.sum( xrel**2 ) )
+    V0 = np.sqrt( np.sum( vrel**2 ) )
+
+
+    dvperp = 2*b*V0**3 / (G*mstar) * 1.0/( 1.0 + b*b*V0**4/(G*G*mstar*mstar))
+    dvpar = 2.0*V0 / ( 1.0 + b*b*V0**4/(G*G*mstar*mstar))
+    
+    vnew = vcartISO - dvpar * vrel/V0  - dvperp * xrel/b
+
+    return vnew
 
 if __name__=='__main__':
     test_lb2()
