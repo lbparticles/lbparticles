@@ -17,7 +17,7 @@ In order to evaluate the particle's position and velocity at arbitrary times, a 
 # Initializing a particle 
 
 The particle's position and velocity at the particle's t=0
-`
+```
 import lbparticles
 import numpy as np
 from lbparticles import lbprecomputer, logpotential
@@ -34,7 +34,7 @@ part = lbparticles.particleLB( xcart, vcart, psir, nu0, lbpre, ordershape=orders
 
 X,V = part.xvabs(100) # find the particle's position and velocity 100 Myr later.
 
-` 
+``` 
 
 
 # Units 
