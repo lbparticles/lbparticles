@@ -1,3 +1,5 @@
+# LBParticles
+
 This code describes the orbits of particles in central potentials following the work of Lynden-Bell (2015).
 
 Once initialized with a 3D position and velocity, and a specified potential, the particle's position and velocity at an arbitrary point in time can be computed in constant time.
