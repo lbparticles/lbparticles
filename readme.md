@@ -8,7 +8,7 @@ The code includes a simple class called logpotential, corresponding to a circula
 
 The logpotential or similar specifies the spherically-symmetric part of the potential. For particles orbiting near a Milky Way-like disk, the particle is subject to vertical oscillations at a characteristic frequency sqrt(4 pi G rho0), where G is Newton's constant and rho0 is the midplane density, of order 0.2 solar masses per cubic parsec for the Solar neighborhood. The code additionally allows this midplane density to vary as a powerlaw, so that the frequency of vertical oscillation will depend on the particle's position.
 
-For particles whose orbits rarely take them near the disk, the orbital plane of 
+For particles whose orbits rarely take them near the disk because of high inclinations or large semi-major axes, the orbital plane of the particle will change very little as the result of gravitational interactions with the disk. To adopt this assumption, one can pass `tilt=True` in the constructor for particleLB. The particle's position and velocity will still be in the usual disk-centered coordinate system (see below), but internally the particle's coordinate system will be rotated such that it has no "z" motion, and when the particle's position is requested at a different time, the particle's internal coordinates will be rotated back to the global coordinate system.
 
 # Loading a precomputer 
 
