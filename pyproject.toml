@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "LBPARTICLES_LBPARTICLES"
+version = "0.0.1"
+authors = [
+  { name="John Forbes", email="john.forbes@canterbury.ac.nz" },
+  { name="Jack Patterson", email="jack.patterson@canterbury.ac.nz" },
+  { name="Angus Forrest", email="angus.forrest@canterbury.ac.nz" },
+]
+description = "Lynden Bell Particles"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/LBParticles/LBParticles"
+Issues = "https://github.com/LBParticles/LBParticles/issues"
