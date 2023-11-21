@@ -1,15 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import pdb
-import scipy.integrate
-import scipy.fft
-import scipy.spatial
+import pandas as pd
 import corner
 import pickle
 import time
 import copy
+import pdb
+import scipy.integrate
+import scipy.fft
+import scipy.spatial
+from scipy.spatial.transform import Rotation
 from tqdm import tqdm
-import pandas as pd
+
 
 # I would suggest for units Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
 # caution is warranted about the definition of t. Is this t relative to the most recent perturbation or since the start of the "simulation"?
@@ -233,37 +235,25 @@ class lbprecomputer:
         
         return ret, ret_nu
 
-def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
-    if not hasattr(lbpre, 'shapezeros') or hardreset:
-        lbpre.shapezeros = {}
-    if not hasattr(lbpre, 'Warrs') or hardreset:
-        lbpre.Warrs = {}
 
-    for shapeorder in tqdm(range(maxshapeorder+1,-1,-1)):
-        W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
-        lbpre.Warrs[shapeorder] = W_inv_arr
-        lbpre.shapezeros[shapeorder] = shapezeroes
-    lbpre.save()
+class logpotential:
+    def __init__(self, vcirc):
+        self.vcirc = vcirc
+    def __call__(self, r):
+        return -self.vcirc**2 * np.log(r)
+    def Omega(self,r):
+        return self.vcirc/r
+    def gamma(self,r):
+        return np.sqrt(2.0)
+    def kappa(self,r):
+        return self.Omega(r)*self.gamma(r)
+    def vc(self, r):
+        return self.vcirc
+    def ddr(self, r):
+        return -self.vcirc**2 / r
+    def ddr2(self, r):
+        return self.vcirc**2 / (r*r)
 
-
-
-
-def buildlbpre():
-    nchis = 1000
-    nks = 100
-    etarget = 0.08
-    psir = logpotential(220.0)
-    shapeorder=100
-    timeorder=10
-    alpha = 2.2
-
-    #lbpre = lbprecomputer( timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20 )
-    
-    lbpre = lbprecomputer.load( 'big_10_1000_alpha2p2_lbpre.pickle' )
-    lbpre.add_new_data( 1000 )
-
-
-from scipy.spatial.transform import Rotation
 
 class particleLB:
     # use orbits from Lynden-Bell 2015.
@@ -1016,6 +1006,48 @@ class particleLB:
         return r,phiabs, rdot,vphi
 
 
+class timer:
+    def __init__(self):
+        self.ticks = [time.time()]
+        self.labels = []
+    def tick(self,label):
+        self.ticks.append(time.time())
+        self.labels.append(label)
+    def timeto(self, label):
+        if label in self.labels:
+            i = self.labels.index(label)
+            return self.ticks[i+1]-self.ticks[i]
+        else:
+            return np.nan
+    def report(self):
+        arr = np.array(self.ticks)
+        deltas = arr[1:]-arr[:-1]
+        print("Timing report:")
+        for i in range(len(self.labels)):
+            print(self.labels[i], deltas[i], 100*deltas[i]/np.sum(deltas),r'%')
+
+
+def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
+    if not hasattr(lbpre, 'shapezeros') or hardreset:
+        lbpre.shapezeros = {}
+    if not hasattr(lbpre, 'Warrs') or hardreset:
+        lbpre.Warrs = {}
+
+    for shapeorder in tqdm(range(maxshapeorder+1,-1,-1)):
+        W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
+        lbpre.Warrs[shapeorder] = W_inv_arr
+        lbpre.shapezeros[shapeorder] = shapezeroes
+    lbpre.save()
+
+
+def buildlbpre(nchis = 1000, nks = 100, etarget = 0.08, psir = logpotential(220.0), shapeorder = 100, timeorder=10,alpha=2.2,filename=None):
+    if filename == None:    
+        lbpre = lbprecomputer( timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20 )
+        return 0
+    lbpre = lbprecomputer.load(filename)
+    lbpre.add_new_data( 1000 )
+    return 0
+
 
 def coszeros(ordN):
     ''' Finds the first ordN zeros of cos(ordN theta).'''
@@ -1025,6 +1057,7 @@ def coszeros(ordN):
     for i in range(ordN):
         theZeros[i] = (np.pi/2.0 + i*np.pi)/ordN
     return theZeros
+
 
 def survey_lb():
     ## quickly get a sense of what values of e and k need to be tabulated.
@@ -1203,6 +1236,7 @@ def benchmark():
 
         timmy.report() # have to see what the heck is taking so long
 
+
 def test_lb2():
     vcirc = 220.0
     psir = logpotential(vcirc)
@@ -1253,43 +1287,6 @@ def test_lb2():
         if not np.all([xc,yc,zc, vxc,vyc,vzc]):
             pdb.set_trace()
 
-class timer:
-    def __init__(self):
-        self.ticks = [time.time()]
-        self.labels = []
-    def tick(self,label):
-        self.ticks.append(time.time())
-        self.labels.append(label)
-    def timeto(self, label):
-        if label in self.labels:
-            i = self.labels.index(label)
-            return self.ticks[i+1]-self.ticks[i]
-        else:
-            return np.nan
-    def report(self):
-        arr = np.array(self.ticks)
-        deltas = arr[1:]-arr[:-1]
-        print("Timing report:")
-        for i in range(len(self.labels)):
-            print(self.labels[i], deltas[i], 100*deltas[i]/np.sum(deltas),r'%')
-
-class logpotential:
-    def __init__(self, vcirc):
-        self.vcirc = vcirc
-    def __call__(self, r):
-        return -self.vcirc**2 * np.log(r)
-    def Omega(self,r):
-        return self.vcirc/r
-    def gamma(self,r):
-        return np.sqrt(2.0)
-    def kappa(self,r):
-        return self.Omega(r)*self.gamma(r)
-    def vc(self, r):
-        return self.vcirc
-    def ddr(self, r):
-        return -self.vcirc**2 / r
-    def ddr2(self, r):
-        return self.vcirc**2 / (r*r)
 
 def getPolarFromCartesianXV( xv ):
     x = xv[0,:]
@@ -1305,7 +1302,6 @@ def getPolarFromCartesianXV( xv ):
     v = (x*vy- vx*y)/r
 
     return np.vstack([r,theta,z,u,v,vz]) 
-
 
 
 def getPolarFromCartesian( xcart, vcart ):
@@ -1330,6 +1326,7 @@ def getCartesianFromPolar( xpol, vpol ):
     vy = u*np.sin(theta) + vincl*np.cos(theta)
 
     return (x,y,z), (vx,vy,w)
+
 
 # handle time/accounting - refer the querier to the correct unperturbedParticle solution, i.e. where the particle is on its epicycle.
 class perturbedParticle:
@@ -1378,6 +1375,7 @@ def findClosestApproach( orb1, orb2, tmin ):
     res = scipy.optimize.minimize_scalar( dist2, bracket=(ts[ii-1], ts[ii+1]) )
     return res.x
 
+
 def applyPerturbation( orbISO, orbStar, tPerturb, mstar ):
     # Assume tPerturb is the relevant time of closest approach. The ISO, whose 'perturbedParticle' orbit
     
@@ -1404,6 +1402,7 @@ def applyPerturbation( orbISO, orbStar, tPerturb, mstar ):
     vnew = vcartISO - dvpar * vrel/V0  - dvperp * xrel/b
 
     return vnew
+
 
 if __name__=='__main__':
     test_lb2()
