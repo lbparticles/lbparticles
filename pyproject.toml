@@ -1,6 +1,6 @@
 [project]
 name = "LBParticles"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
     { name = "John Forbes", email = "john.forbes@canterbury.ac.nz" },
     { name = "Jack Patterson", email = "jack.patterson@canterbury.ac.nz" },
@@ -35,3 +35,9 @@ docs = ["sphinx>=7.2.6", "pandoc", "myst-nb", "sphinx-book-theme", "ipython"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+exclude = [
+    "/docs",
+    "/tests"
+]
