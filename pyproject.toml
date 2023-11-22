@@ -1,14 +1,10 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
-name = "LBPARTICLES_LBPARTICLES"
+name = "LBParticles"
 version = "0.0.1"
 authors = [
-  { name="John Forbes", email="john.forbes@canterbury.ac.nz" },
-  { name="Jack Patterson", email="jack.patterson@canterbury.ac.nz" },
-  { name="Angus Forrest", email="angus.forrest@canterbury.ac.nz" },
+    { name = "John Forbes", email = "john.forbes@canterbury.ac.nz" },
+    { name = "Jack Patterson", email = "jack.patterson@canterbury.ac.nz" },
+    { name = "Angus Forrest", email = "angus.forrest@canterbury.ac.nz" },
 ]
 description = "Lynden Bell Particles"
 readme = "README.md"
@@ -18,12 +14,20 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies=["corner>=2.2.2",
-"matplotlib>=3.8.1",
-"numpy>=1.26.2",
-"pandas>=2.1.3",
-"scipy>=1.11.3",
-"tqdm>=4.66.1"]
+dependencies = [
+    "corner>=2.2.2",
+    "matplotlib>=3.8.1",
+    "numpy>=1.26.2",
+    "pandas>=2.1.3",
+    "scipy>=1.11.3",
+    "tqdm>=4.66.1"
+]
+
 [project.urls]
-Homepage = "https://github.com/LBParticles/LBParticles"
-Issues = "https://github.com/LBParticles/LBParticles/issues"
+"Homepage" = "https://lbparticles.readthedocs.io"
+"Source" = "https://github.com/LBParticles/LBParticles"
+"Issues" = "https://github.com/LBParticles/LBParticles/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
