@@ -1,7 +1,7 @@
 .. _quickstart:
 
-Installation
-============
+Getting Started
+===============
 
 Loading a precomputer
 ---------------------
