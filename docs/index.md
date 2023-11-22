@@ -19,7 +19,7 @@ pages/api
 
 ## Attribution
 
-If you make use of this code, please cite [TODO]():
+If you make use of this code, please cite (TODO):
 
 ```tex
     @article{lbparticles,

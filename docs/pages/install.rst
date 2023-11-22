@@ -41,7 +41,7 @@ directory and run:
 
 
 Running Tests
------
+-------------
 
 If you installed from source, you can run the unit tests. From the root of the
 source directory, run:
