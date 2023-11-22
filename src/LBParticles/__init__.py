@@ -2,6 +2,6 @@ __all__ = ["lbprecomputer", "particleLB", "logpotential", "timer", "precompute_i
            "coszeros", "survey_lb", "getPolarFromCartesianXV", "getCartesianFromPolar", "getPolarFromCartesian",
            "perturbedParticle", "findClosestApproach", "applyPerturbation", "G"]
 
-from LBParticles import lbprecomputer, particleLB, logpotential, timer, precompute_inverses_up_to, buildlbpre, \
+from LBParticles.lbparticles import lbprecomputer, particleLB, logpotential, timer, precompute_inverses_up_to, buildlbpre, \
     coszeros, survey_lb, getPolarFromCartesianXV, getCartesianFromPolar, getPolarFromCartesian, \
     perturbedParticle, findClosestApproach, applyPerturbation, G

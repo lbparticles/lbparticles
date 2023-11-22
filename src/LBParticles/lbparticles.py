@@ -11,7 +11,6 @@ import scipy.spatial
 from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
-
 # I would suggest for units Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
 # caution is warranted about the definition of t. Is this t relative to the most recent perturbation or since the start of the "simulation"?
 G= 0.00449987 # pc^3 / (solar mass Myr^2)
