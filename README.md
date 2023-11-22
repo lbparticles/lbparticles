@@ -22,19 +22,19 @@ In order to evaluate the particle's position and velocity at arbitrary times, a 
 
 The particle's position and velocity at the particle's t=0
 ```
-import lbparticles
+from LBParticles import lbprecomputer, particleLB, logpotential, G
 import numpy as np
-from lbparticles import lbprecomputer, logpotential
+
 xcart = [8100.0, 0.0, 90.0] # the Sun's location in x,y,z cartesian coordinates (in parsecs)
 vcart = [-11.1, 12.24 + 220.0, 7.25] # similar to the Sun's velocity in vx, vy, vz (given the position xcart) in units of pc/Myr.
-nu0 = np.sqrt( 4.0*np.pi * lbparticles.G * 0.2) # vertical oscillation frequency at r=8100 pc.
+nu0 = np.sqrt( 4.0*np.pi * G * 0.2) # vertical oscillation frequency at r=8100 pc.
 alpha = 2.2 # powerlaw slope of the midplane density with radius, so that nu = nu0 (r/r0)^(-alpha/2)
-psir = lbparticles.logpotential(220.0) # a logarithmic potential with a circular velocity of 220 pc/Myr.
-lbpre = lbparticles.lbprecomputer.load('big_10_1000_alpha2p2_lbpre.pickle') # load the precomputer.
+psir = logpotential(220.0) # a logarithmic potential with a circular velocity of 220 pc/Myr.
+lbpre = lbprecomputer.load('big_10_1000_alpha2p2_lbpre.pickle') # load the precomputer.
 ordershape = 10 # number of terms used in the series to find the tangential position of the particle
 ordertime = 5 # number of terms used in the series to find the relationship between the particle's phase in its radial oscillation and the current time.
 
-part = lbparticles.particleLB( xcart, vcart, psir, nu0, lbpre, ordershape=ordershape, ordertime=ordertime, alpha=2.2 )
+part = particleLB( xcart, vcart, psir, nu0, lbpre, ordershape=ordershape, ordertime=ordertime, alpha=2.2 )
 
 X,V = part.xvabs(100) # find the particle's position and velocity 100 Myr later.
 
