@@ -23,6 +23,10 @@ dependencies = [
     "tqdm>=4.66.1"
 ]
 
+[project.optional-dependencies]
+test = ["pytest"]
+docs = ["sphinx>=7.2.6", "pandoc", "myst-nb", "sphinx-book-theme", "ipython"]
+
 [project.urls]
 "Homepage" = "https://lbparticles.readthedocs.io"
 "Source" = "https://github.com/LBParticles/LBParticles"
