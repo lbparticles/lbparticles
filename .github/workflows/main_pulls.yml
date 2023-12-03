@@ -1,0 +1,29 @@
+name: CI for pull requests on main branch
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**/README.md'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Pull the code
+      - uses: actions/checkout@v3
+
+      # Install Python interpreter
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10.13'
+
+      - name: Install PyTest
+        run: pip install pytest
+
+      - name: Install package dependencies
+        run: pip install -r requirements.txt
+
+      - name: Perform tests
+        run: pytest

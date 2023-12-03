@@ -50,5 +50,4 @@ def test_lb2():
         vyc = np.isclose(vcart[1], vy)
         vzc = np.isclose(vcart[2], vz)
 
-        if not np.all([xc, yc, zc, vxc, vyc, vzc]):
-            pdb.set_trace()
+        assert np.all([xc, yc, zc, vxc, vyc, vzc])
