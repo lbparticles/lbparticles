@@ -11,9 +11,7 @@ import scipy.spatial
 from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
-# I would suggest for units Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
-# caution is warranted about the definition of t. Is this t relative to the most recent perturbation or since
-# the start of the "simulation"?
+# Units throughout are Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
 G = 0.00449987  # pc^3 / (solar mass Myr^2)
 
 
@@ -139,7 +137,6 @@ class lbprecomputer:
                     k, sort_e, i])  # not obvious if we should pick es, ks, or do something fancier
 
     def get_k_given_e(self, ein):
-        # very hacky I'm sorry
         xCart0 = [8100.0, 0, 0]
         vCart0 = [0.0003, 220, 0]
 
@@ -221,23 +218,94 @@ class lbprecomputer:
         with open(fn, 'rb') as f:
             return pickle.load(f)
 
-    def get_t_terms(self, e, maxorder=None):
+    def get_chi_index_arr(self, N):
+        ''' 
+            The precomputer evaluates several integrals on a grid uniformly-spaced (in chi) from 0 to 2pi. By default this grid has 1000 entries.
+            Each particleLB generates its map between t and chi by querying lbprecomputer::get_t_terms, which returns an array of values at an array of chi values.
+            The process of finding the values to return is often the most expensive part of initializing a particle. The particle may not need all 1000 entries.
+            In this case, we need to find the points in the original 1000-element array that we would like to use in the new smaller array.
+            This method returns that mapping. Given a new N (number of points to evaluate chi from 0 to 2pi), returns an array of size N with the indices into the full array 0,1,2,...self.nchis-1.
+            The corresponding chi's can be found by evaluating self.chi_eval[arr] where arr is the array returned by this method. This is done in the method lbprecomputer::get_chi_arr.
+        '''
+        assert N<=self.nchis
+        return np.linspace(0,self.nchis-1,N, dtype=int)
+    def get_chi_arr(self,N):
+        ''' A convenience function to find the points where chi is evaluated if N points are requested. See documentation for lbprecomputer::get_chi_index_arr.'''
+        inds = self.get_chi_index_arr(N)
+        return self.chi_eval[inds]
+
+
+    def get_t_terms(self, e, maxorder=None, includeNu=True, nchis=None):
         # interpolate target data to the actual k<-->e.
         # note that this will be called (once) by each particle, so ideally it should be reasonably fast.
 
         if maxorder is None:
-            ordermax = self.ordertime + 2
+            ordermax = self.ordertime+2
         else:
             ordermax = maxorder
-        ret = np.zeros((ordermax, self.nchis))
-        ret_nu = np.zeros((ordermax, self.nchis))
-        for i in range(ordermax):
-            for k in range(self.nchis):
-                ret[i, k] = self.interpolators[i, k](e)
-                ret_nu[i, k] = self.interpolators_nuphase[i, k](e)
+        if ordermax>self.ordertime+2:
+            raise Exception("More orders requested than have been pre-computed in lbprecomputer::get_t_terms")
 
+        if nchis is None:
+            nchiEval = self.nchis
+        elif nchis <= self.nchis:
+            nchiEval = nchis
+        else:
+            raise Exception("More chi evaluation points requested than have been pre-computed in lbprecomputer::get_t_terms")
+
+        chiarr = self.get_chi_index_arr(nchiEval)
+
+        ret = np.zeros( (ordermax, nchiEval) )
+        ret_nu = np.zeros( (ordermax, nchiEval) )
+        for i in range(ordermax):
+            for k in range(nchiEval):
+                keval = chiarr[k]
+                ret[i,k] = self.interpolators[i,keval](e)
+                if includeNu:
+                    ret_nu[i,k] = self.interpolators_nuphase[i,keval](e)
+        
         return ret, ret_nu
 
+
+class hernquistpotential:
+    def __init__(self, scale, mass=None, vcirc=None):
+        ''' Create a hernquistpotential object.
+        Parameters:
+            scale - the scale radius of the potential in parsecs
+            mass - the mass of the material producing the potential, in solar masses
+            vcirc - the circular velocity at r=scale, in pc/Myr (close to km/s)
+        Exactly one of mass or vcirc must be specified (not both)
+        '''
+        # vcirc^2 = G*mass*r/(r+a)^2.
+        # at r=a, vcirc^2 = G*mass*a/4a^2 = G*mass/(4*a)
+        if (mass is None and vcirc is None) or (not mass is None and not vcirc is None):
+            raise Exception("Need to specify exactly one of mass, or vcirc.")
+        if mass is None:
+            self.mass = vcirc*vcirc*4.0*scale/G
+        else:
+            self.mass = mass
+        self.scale = scale
+
+    def __call__(self,r):
+        return G*self.mass/(r+self.scale)
+
+    def vc(self, r):
+        return np.sqrt(G*self.mass*r)/(r+self.scale)
+
+    def Omega(self, r):
+        return vc(r)/r
+
+    def gamma(self,r):
+        return np.sqrt(3.0 - 2.0*r/(r+self.scale))
+
+    def kappa(self,r):
+        return self.Omega(r)*self.gamma(r)
+
+    def ddr(self, r):
+        return -G*self.mass/(r+self.scale)**2
+
+    def ddr2(self, r):
+        return 2.0*G*self.mass/(r+self.scale)**3
 
 class logpotential:
     def __init__(self, vcirc):
@@ -264,13 +332,42 @@ class logpotential:
     def ddr2(self, r):
         return self.vcirc ** 2 / (r * r)
 
+def particle_ivp2(t, y ):
+    '''The derivative function for scipy's solve_ivp - used to compare integrated particle trajectories to our semi-analytic versions'''
+    vcirc = 220.0
+    nu0 = np.sqrt(4.0*np.pi*G*0.2)
+    alpha = 2.2
+    # y assumed to be a 6 x N particle array of positions and velocities.
+    xx = y[0,:]
+    yy = y[1,:]
+    zz = y[2,:]
+    vx = y[3,:]
+    vy = y[4,:]
+    vz = y[5,:]
+
+    r = np.sqrt(xx*xx + yy*yy)# + zz*zz)
+    g = -vcirc*vcirc / r
+    nu = nu0 * (r/8100.0)**(-alpha/2.0)
+
+    res = np.zeros( y.shape )
+    res[0,:] = vx
+    res[1,:] = vy
+    res[2,:] = vz
+    res[3,:] = g*xx/r
+    res[4,:] = g*yy/r
+    #res[5,:] = g*zz/r
+    res[5,:] = - zz*nu*nu
+
+
+    return res
+
 
 class particleLB:
     # use orbits from Lynden-Bell 2015.
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
     def __init__(self, xCartIn, vCartIn, psir, nunought, lbpre, rnought=8100.0, ordershape=1, ordertime=1, tcorr=True,
                  emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
-                 tilt=False, alpha=2.2, adhoc=None):
+                 tilt=False, alpha=2.2, adhoc=None, nchis=1000, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate'):
         self.adhoc = adhoc
         # psir is psi(r), the potential as a function of radius.
         # don't understand things well enough yet, but let's start writing in some of the basic equations
@@ -307,6 +404,9 @@ class particleLB:
         vcross[2, 0] = -v[1]
         vcross[1, 2] = -v[0]
         vcross[2, 1] = v[0]
+
+        self.zopt = zopt
+        tilt = zopt=='tilt'
 
         if tilt:
             rot = np.eye(3) + vcross + vcross @ vcross * 1.0 / (1.0 + cose)
@@ -382,41 +482,7 @@ class particleLB:
         else:
             pdb.set_trace()
 
-        tcorrs = []
-        if tcorr is True and not tilt:
-            epsi = self.epsilon
-            for i in range(10):
-                # tcorr = 1.0 - self.Ez/(nunought* (self.peri/self.rnought)**-(alpha/2.0))**2 * 1.0/self.peri**2
-                tcorr = 1.0 - self.Ez / (nunought * (R / self.rnought) ** -(alpha / 2.0)) ** 2 * 1.0 / self.peri ** 2
-                tcorrs.append(tcorr)
 
-                # epsi = self.epsilon/tcorr #**0.25
-                hi = self.h / tcorr
-                # epsi = -( self.apo*self.apo * self.psi(self.apo) - self.peri*self.peri * self.psi(self.peri) ) / (self.apo*self.apo - self.peri*self.peri)
-
-                # res_peri = scipy.optimize.root_scalar( fpp, args=(epsi,hi), fprime=True, fprime2=True, x0=peri_zero, method='halley', rtol=1.0e-8, xtol=1.0e-10)
-                # self.peri = res_peri.root
-
-                # res_apo = scipy.optimize.root_scalar( fpp, args=(epsi, self.h), fprime=True, fprime2=True, x0=apo_zero, method='halley', rtol=1.0e-8, xtol=1.0e-10)
-                # self.apo = res_apo.root
-
-            # self.epsilon = self.epsilon #/tcorr**0.25
-            # self.h = self.h/tcorr
-            # epsi = -( self.apo*self.apo * self.psi(self.apo) - self.peri*self.peri * self.psi(self.peri) ) / (self.apo*self.apo - self.peri*self.peri)
-            # self.epsilon = epsi
-
-            tcorrs = np.array(tcorrs)
-            # print("tcorr delta sequence:", tcorrs[1:]-tcorrs[:-1] )
-
-            # if 2.0*self.epsilon + 2.0*self.psi(self.peri) - self.h*self.h/(self.peri*self.peri) <=0:
-            #    pdb.set_trace()
-
-            # pdb.set_trace()
-
-        else:
-            tcorr = 1.0
-
-        #
         if profile:
             tim.tick('Find peri apo')
 
@@ -451,10 +517,8 @@ class particleLB:
 
         self.ell = self.ubar ** (-1.0 / self.k)
 
-        try:
-            chi_eval = lbpre.chi_eval
-        except:
-            chi_eval = np.linspace(0, 2.0 * np.pi, lbpre.nchis)  # try it out
+        chi_eval = lbpre.get_chi_arr(nchis)
+
 
         timezeroes = coszeros(self.ordertime)
         wt_arr = np.zeros((self.ordertime, self.ordertime))
@@ -492,7 +556,7 @@ class particleLB:
         # now that we know the coefficients we can put together t(chi) and then chi(t).
         # tee needs to be multiplied by l^2/(h*m0*(1-e^2)^(nu+1/2)) before it's in units of time.
 
-        t_terms, nu_terms = lbpre.get_t_terms(self.e, maxorder=self.ordertime + 2)
+        t_terms, nu_terms = lbpre.get_t_terms(self.e, maxorder=self.ordertime+2, includeNu=(zopt=='first' or zopt=='zero'), nchis=nchis )
         if profile:
             tim.tick('Obtain tee terms')
 
@@ -525,31 +589,27 @@ class particleLB:
         # nuu * nufac is the integral term in phi(t), evaluated at a sequence of chi's from 0 to 2pi.
         # The following approximate integrals need to include the initial phase, which isn't evaluated unitl later.
 
-        dchi = chi_eval[1] - chi_eval[0]
-        integrands = np.sin(chi_eval) / (1.0 - self.e * np.cos(chi_eval)) * np.cos(2.0 * nuu * nufac)
-        to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
-        lefts = integrands[:-1]
-        rights = integrands[1:]
-        self.cosine_integral = np.zeros(len(chi_eval))
-        # self.cosine_integral[1:] = np.cumsum((lefts+rights)/2.0 * dchi)
-        self.cosine_integral[1:] = np.cumsum(
-            [to_integrate.integrate(chi_eval[k], chi_eval[k + 1]) for k in range(len(chi_eval) - 1)])
+        if zopt=='first':
+            dchi = chi_eval[1] - chi_eval[0]
+            integrands = np.sin(chi_eval) / (1.0 - self.e * np.cos(chi_eval)) * np.cos(2.0 * nuu * nufac)
+            to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
+            lefts = integrands[:-1]
+            rights = integrands[1:]
+            self.cosine_integral = np.zeros(len(chi_eval))
+            # self.cosine_integral[1:] = np.cumsum((lefts+rights)/2.0 * dchi)
+            self.cosine_integral[1:] = np.cumsum(
+                [to_integrate.integrate(chi_eval[k], chi_eval[k + 1]) for k in range(len(chi_eval) - 1)])
 
-        integrands = np.sin(chi_eval) / (1.0 - self.e * np.cos(chi_eval)) * np.sin(2.0 * nuu * nufac)
-        to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
-        # lefts = integrands[:-1]
-        # rights = integrands[1:]
-        self.sine_integral = np.zeros(len(chi_eval))
-        # self.sine_integral[1:] = np.cumsum( (lefts+rights)/2.0 * dchi )
-        self.sine_integral[1:] = np.cumsum(
-            [to_integrate.integrate(chi_eval[k], chi_eval[k + 1]) for k in range(len(chi_eval) - 1)])
+            integrands = np.sin(chi_eval) / (1.0 - self.e * np.cos(chi_eval)) * np.sin(2.0 * nuu * nufac)
+            to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
+            # lefts = integrands[:-1]
+            # rights = integrands[1:]
+            self.sine_integral = np.zeros(len(chi_eval))
+            # self.sine_integral[1:] = np.cumsum( (lefts+rights)/2.0 * dchi )
+            self.sine_integral[1:] = np.cumsum(
+                [to_integrate.integrate(chi_eval[k], chi_eval[k + 1]) for k in range(len(chi_eval) - 1)])
 
-        #        dchi = chi_eval[1]-chi_eval[0]
-        #        self.cosine_integral = np.cumsum( dchi*np.sin(chi_eval)/(1.0-self.e*np.cos(chi_eval)) * np.cos(2.0*nuu*nufac) )
-        #        self.sine_integral = np.cumsum( dchi*np.sin(chi_eval)/(1.0-self.e*np.cos(chi_eval)) * np.sin(2.0*nuu*nufac) )
 
-        # nu1 = nuu*nufac + self.alpha*self.e/(4.0*self.k) * np.cumsum( dchi * np.sin(chi_eval) / (1.0 - self.e*np.cos(chi_eval)) * np.sin(2.0* nuu*nufac) )
-        # nu2 = nuu*nufac + self.alpha*self.e/(4.0*self.k) * np.cumsum( dchi * np.sin(chi_eval) / (1.0 - self.e*np.cos(chi_eval)) * np.sin(2.0* nu1) )
 
         try:
             self.t_of_chi = scipy.interpolate.CubicSpline(chi_eval, tee * tfac)
@@ -558,8 +618,9 @@ class particleLB:
             self.nut_of_t = scipy.interpolate.CubicSpline(tee * tfac, nuu * nufac)
             # self.nut_of_chi = scipy.interpolate.CubicSpline( chi_eval, nu2 )
             # self.nut_of_t= scipy.interpolate.CubicSpline( tee*tfac, nu2 )
-            self.sine_integral_of_chi = scipy.interpolate.CubicSpline(chi_eval, self.sine_integral)
-            self.cosine_integral_of_chi = scipy.interpolate.CubicSpline(chi_eval, self.cosine_integral)
+            if zopt=='first':
+                self.sine_integral_of_chi = scipy.interpolate.CubicSpline(chi_eval, self.sine_integral)
+                self.cosine_integral_of_chi = scipy.interpolate.CubicSpline(chi_eval, self.cosine_integral)
         except:
             print("chi doesn't seem to be monotonic!!")
             # raise ValueError
@@ -729,6 +790,12 @@ class particleLB:
         self.nu_t_0 = np.arctan2(-w, z * self.nu(0)) - self.zphase_given_tperi(self.tperiIC)
         # self.phi0 = np.arctan2( -w, z*nu )
 
+        if zopt=='integrate':
+            self.initialize_z(rtol=rtolz, atol=atolz, Neval=Nevalz)
+            if profile:
+                tim.tick('initialize z')
+
+
         if np.isnan(self.tperiIC):
             pdb.set_trace()
 
@@ -829,83 +896,148 @@ class particleLB:
                 self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) + np.cos(
             2.0 * self.nu_t_0) * (self.sine_integral_of_chi(chi) - self.sine_integral_of_chi(self.chiIC)))
 
+
+    def initialize_z( self, atol=1.0e-8, rtol=1.0e-8, Neval=1000 ):
+        def to_integrate(tt, y):
+            zz = y[0]
+            vz = y[1]
+
+            nu = self.nu(tt)
+
+            res = np.zeros( y.shape )
+            res[0] = vz
+            res[1] = -zz*nu*nu
+            return res
+        ic0 = [1.0, 0.0]
+        ic1 = [0.0, 1.0]
+        ts = np.linspace( 0, self.Tr, Neval )
+        res0 = scipy.integrate.solve_ivp( to_integrate, [np.min(ts),np.max(ts)], ic0, t_eval=ts, atol=1.0e-7, rtol=1.0e-7, method='DOP853')
+        res1 = scipy.integrate.solve_ivp( to_integrate, [np.min(ts),np.max(ts)], ic1, t_eval=ts, atol=1.0e-7, rtol=1.0e-7, method='DOP853')
+
+        z0s = res0.y[0,:]
+        vz0s = res0.y[1,:]
+        z1s = res1.y[0,:]
+        vz1s = res1.y[1,:]
+
+
+        self.z0_interp = scipy.interpolate.CubicSpline(  ts, z0s )
+        self.z1_interp = scipy.interpolate.CubicSpline(  ts, z1s )
+        self.vz0_interp = scipy.interpolate.CubicSpline( ts, vz0s )
+        self.vz1_interp = scipy.interpolate.CubicSpline( ts, vz1s )
+
+
+        self.monodromy = np.zeros((2,2))
+        self.monodromy[0,0] = self.z0_interp(self.Tr)
+        self.monodromy[1,0] = self.vz0_interp(self.Tr)
+        self.monodromy[0,1] = self.z1_interp(self.Tr)
+        self.monodromy[1,1] = self.vz1_interp(self.Tr)
+
+        self.zICvec = np.array([self.xCart0[2], self.vCart0[2]]).reshape((2,1))
+
+
+
+    def zvz_floquet(self, t):
+        texcess = t % self.Tr
+        norb = round( (t-texcess)/self.Tr )
+        to_mult = np.zeros( (2,2) )
+        to_mult[0,0] = self.z0_interp( texcess)
+        to_mult[1,0] = self.vz0_interp(texcess)
+        to_mult[0,1] = self.z1_interp( texcess)
+        to_mult[1,1] = self.vz1_interp(texcess)
+        ics = self.zICvec
+        ret = to_mult @ np.linalg.matrix_power( self.monodromy, norb ) @ ics
+        return ret[0][0], ret[1][0]
+
+
     def zvz(self, t):
-        tPeri = t + self.tperiIC  # time since reference pericenter. When the input t is 0, we want this to be the same as the tPeri we found in init()
-        nu_t = self.zphase_given_tperi(tPeri) + self.nu_t_0  # nu times t THIS is phi(t), eq. 27 of Fiore 2022.
+        if self.zopt=='tilt':
+            return 0.0, 0.0
 
-        # phiconst = self.phiconst(t)
-        chi_excess = self.chi_excess_given_tperi(tPeri)
+        tPeri = t + self.tperiIC # time since reference pericenter. When the input t is 0, we want this to be the same as the tPeri we found in init()
+        nu_t = self.zphase_given_tperi(tPeri) + self.nu_t_0 # nu times t THIS is phi(t), eq. 27 of Fiore 2022.
+        nu_now  =self.nu(t)
 
-        Norb = self.Norb(tPeri)
-        # Norb = self.Norb(t)
-        # cosine_integral = self.cosine_integral_of_chi(chi) + self.adhoc[1]*Norb*self.cosine_integral_of_chi(2.0*np.pi) - self.adhoc[2]*self.cosine_integral_of_chi(self.chiIC)
-        # sine_integral = self.sine_integral_of_chi(chi) + self.adhoc[4]* Norb*self.sine_integral_of_chi(2.0*np.pi) - self.adhoc[5]*self.sine_integral_of_chi(self.chiIC)
-
-        if Norb == 0:
-            cosine_integral = self.effcos(chi_excess)
-            sine_integral = self.effsin(chi_excess)
-        else:
-            cosine_integral = self.effcos(2 * np.pi) - self.alpha * self.e / (2.0 * self.k) * (
-                    np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.cosine_integral_of_chi(
-                chi_excess) - np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.sine_integral_of_chi(
-                chi_excess))
-            sine_integral = self.effsin(2 * np.pi) - self.alpha * self.e / (2.0 * self.k) * (
-                    np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.cosine_integral_of_chi(
-                chi_excess) + np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.sine_integral_of_chi(
-                chi_excess))
-
-            # so far we've included the initial component and the "current" component, but if Norb>1 there is an additional set of terms from each radial orbit.
-            if Norb > 1:
-                arrCos = [np.cos(2.0 * (self.nu_t_0 + (i + 1) * self.phase_per_Tr)) for i in range(Norb - 1)]
-                arrSin = [np.sin(2.0 * (self.nu_t_0 + (i + 1) * self.phase_per_Tr)) for i in range(Norb - 1)]
-                to_add_cosine = -self.alpha * self.e / (2.0 * self.k) * (
-                        self.cosine_integral_of_chi(2.0 * np.pi) * np.sum(arrCos) - self.sine_integral_of_chi(
-                    2.0 * np.pi) * np.sum(arrSin))
-                to_add_sine = -self.alpha * self.e / (2.0 * self.k) * (
-                        self.sine_integral_of_chi(2.0 * np.pi) * np.sum(arrCos) + self.cosine_integral_of_chi(
-                    2.0 * np.pi) * np.sum(arrSin))
-                # pdb.set_trace()
-
-                cosine_integral = cosine_integral + to_add_cosine
-                sine_integral = sine_integral + to_add_sine
-
-        # cosine_integral =  self.cosine_integral_of_chi(chi) + (self.adhoc[4]+Norb)*self.cosine_integral_of_chi(2.0*np.pi) - self.cosine_integral_of_chi(self.chiIC)
-        # sine_integral =  self.sine_integral_of_chi(chi) +  (self.adhoc[4]+Norb)*self.sine_integral_of_chi(2.0*np.pi) - self.sine_integral_of_chi(self.chiIC)
-
-        def to_integrate(tpr):
-            tperi = tpr + self.tperiIC
-            nu_tpr = self.zphase_given_tperi(tperi) + self.nu_t_0
-            return self.nudot(tpr) / self.nu(tpr) * np.cos(2.0 * nu_tpr)
-
-        # res = scipy.integrate.quad( to_integrate, 0, t)
-        #        #tbc = -( cosine_integral * 0.5*np.cos(2.0*phiconst)*self.alpha*self.e/self.k - 0.5*sine_integral * np.sin(2.0*phiconst)*self.alpha*self.e/self.k )
-        # tbc = cosine_integral
-        #        if Norb>0:
-        #            pdb.set_trace()
-
-        # nu_t = nu_t + 0.25*np.sin(2.0*phiconst)*self.alpha*self.e/self.k * cosine_integral + 0.25*np.cos(2.0*phiconst)*self.alpha*self.e/self.k * sine_integral
-        # nu_t = nu_t + self.adhoc[0] * ( 0.25*np.cos(2.0*phiconst)*self.alpha*self.e/self.k * cosine_integral - 0.25*np.sin(2.0*phiconst)*self.alpha*self.e/self.k * sine_integral) + self.adhoc[1]* ( 0.25*np.sin(2.0*phiconst)*self.alpha*self.e/self.k * cosine_integral +  0.25*np.cos(2.0*phiconst)*self.alpha*self.e/self.k * sine_integral )
-        # nu_t = nu_t + self.adhoc[0] * 0.5 * cosine_integral - self.adhoc[1]*0.5*sine_integral
-        nu_t = nu_t - 0.5 * sine_integral
-
-        nu_now = self.nu(t)
-
-        if hasattr(self, 'IzIC'):
+        # for backwards compatibility
+        if hasattr(self,'IzIC'):
             pass
         else:
-            r, _, _, _ = self.rphi(0)
-            self.IzIC = self.Ez / (self.nunought * (r / self.rnought) ** -(self.alpha / 2.0))
+            r,_,_,_ = self.rphi(0)
+            self.IzIC = self.Ez/( self.nunought*(r/self.rnought)**-(self.alpha/2.0) )
 
-        # IZ = self.IzIC * np.exp( -np.cos(2.0*phiconst) * cosine_integral * self.alpha*self.e/(2.0*self.k) + np.sin(2.0*phiconst) * sine_integral * self.alpha*self.e/(2.0*self.k) )
-        # IZ = self.IzIC * np.exp( -np.sin(2.0*phiconst) * cosine_integral * self.alpha*self.e/(2.0*self.k) - np.cos(2.0*phiconst) * sine_integral * self.alpha*self.e/(2.0*self.k) )
-        # IZ = self.IzIC  * np.exp( np.sin(2.0*phiconst) * cosine_integral * self.alpha*self.e/(2.0*self.k) + np.cos(2.0*phiconst) * sine_integral * self.alpha*self.e/(2.0*self.k) )
-        # IZ = self.IzIC  * np.exp( np.sin(2.0*phiconst) * cosine_integral * self.alpha*self.e/(2.0*self.k) + np.cos(2.0*phiconst) * sine_integral * self.alpha*self.e/(2.0*self.k) )
-        # IZ = self.IzIC * np.exp( self.adhoc[2]*cosine_integral + self.adhoc[3]*sine_integral )
-        IZ = self.IzIC * np.exp(cosine_integral)
+        IZ = self.IzIC
+        if self.zopt=='zero':
+            w = -np.sqrt(2*IZ*nu_now) * np.sin(nu_t)
+            z = np.sqrt(2*IZ/nu_now) * np.cos(nu_t)
 
-        w = -np.sqrt(2 * IZ * nu_now) * np.sin(nu_t)
-        z = np.sqrt(2 * IZ / nu_now) * np.cos(nu_t)
-        return z, w  # , res[0], tbc
+            # this is all we need for the zeroeth order approximation from Fiore 2022.
+            return z,w
+
+        elif self.zopt=='first':
+
+            phiconst = self.nu_t_0
+            chi_excess = self.chi_excess_given_tperi(tPeri)
+
+            Norb = self.Norb(tPeri)
+
+            if Norb==0:
+                cosine_integral = self.effcos(chi_excess)
+                sine_integral = self.effsin(chi_excess)
+            else:
+                cosine_integral = self.effcos(2*np.pi) \
+                        - self.alpha*self.e/(2.0*self.k) * \
+                        ( np.cos(2*(self.nu_t_0 + Norb*self.phase_per_Tr))*self.cosine_integral_of_chi(chi_excess) \
+                        - np.sin(2*(self.nu_t_0 + Norb*self.phase_per_Tr))*self.sine_integral_of_chi(chi_excess) )
+                sine_integral = self.effsin(2*np.pi) \
+                        - self.alpha*self.e/(2.0*self.k) * \
+                        ( np.sin(2*(self.nu_t_0 + Norb*self.phase_per_Tr))*self.cosine_integral_of_chi(chi_excess) \
+                        + np.cos(2*(self.nu_t_0 + Norb*self.phase_per_Tr))*self.sine_integral_of_chi(chi_excess) )
+
+                # so far we've included the initial component and the "current" component, but if Norb>1 there is an additional set of terms from each radial orbit.
+                if Norb>1:
+                    arrCos = [np.cos(2.0*(self.nu_t_0 + (i+1)*self.phase_per_Tr)) for i in range(Norb-1)]
+                    arrSin = [np.sin(2.0*(self.nu_t_0 + (i+1)*self.phase_per_Tr)) for i in range(Norb-1)]
+                    to_add_cosine = -self.alpha*self.e/(2.0*self.k) * ( self.cosine_integral_of_chi(2.0*np.pi) * np.sum( arrCos ) -   self.sine_integral_of_chi(2.0*np.pi) * np.sum( arrSin ) )
+                    to_add_sine =   -self.alpha*self.e/(2.0*self.k) * (   self.sine_integral_of_chi(2.0*np.pi) * np.sum( arrCos ) + self.cosine_integral_of_chi(2.0*np.pi) * np.sum( arrSin ) )
+                    #pdb.set_trace()
+
+
+                    cosine_integral = cosine_integral + to_add_cosine
+                    sine_integral = sine_integral + to_add_sine
+
+
+
+            # only necessary for debugging.
+            #def to_integrate(tpr):
+            #    tperi = tpr + self.tperiIC
+            #    nu_tpr = self.zphase_given_tperi(tperi) + self.nu_t_0
+            #    return self.nudot(tpr)/self.nu(tpr) * np.cos( 2.0 * nu_tpr )
+            
+            # compare the numerical integral to the machinations above to approximate it.
+            #res = scipy.integrate.quad( to_integrate, 0, t)
+            #tbc = cosine_integral  
+
+
+            nu_t = nu_t  - 0.5*sine_integral 
+
+
+            IZ = self.IzIC * np.exp( cosine_integral  )
+
+            w = -np.sqrt(2*IZ*nu_now) * np.sin(nu_t)
+            z = np.sqrt(2*IZ/nu_now) * np.cos(nu_t)
+            return z,w
+
+        elif self.zopt=='integrate':
+            return self.zvz_floquet(t)
+#            IZ = self.IzIntegrated(t)
+#            psi = self.psi(t)
+#            w = -np.sqrt(2*IZ*nu_now) * np.sin(psi)
+#            z = np.sqrt(2*IZ/nu_now) * np.cos(psi)
+#            return z,w 
+        else:
+            raise Exception("Need to specify an implemented zopt. Options: integrate, first, zeroeth, tilt")
+
+
+
 
     def zphase_given_tperi(self, t):
         past_peri = t % self.Tr
@@ -1131,122 +1263,287 @@ def survey_lb():
     plt.close(fig)
 
 
+def rms(arr):
+    return np.sqrt( np.mean( arr*arr ) )
+
+
+class benchmark_groundtruth:
+    def __init__(self, ts, xcart, vcart):
+        self.ts = ts
+        self.xcart = copy.deepcopy(xcart)
+        self.vcart = copy.deepcopy(vcart)
+    def run(self):
+        ics = np.zeros(6)
+        ics[:3] = self.xcart[:]
+        ics[3:] = self.vcart[:]
+
+        tprev=self.ts[0]
+        self.partarray = np.zeros( (6, len(self.ts) ) )
+        self.partarray[ :, 0 ] = ics[:] 
+
+
+        tim = timer()
+        for i,t in enumerate(self.ts):
+            if i>0:
+                res = scipy.integrate.solve_ivp( particle_ivp2, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=1.0e-14, atol=1.0e-14, method='DOP853')
+                self.partarray[:,i] = res.y[:,-1]
+                tprev = t
+        tim.tick('run')
+        self.runtime = tim.timeto('run')
+
+
+class particle_benchmarker:
+    def __init__(self, groundtruth,identifier,args,kwargs):
+        self.groundtruth = groundtruth
+        self.args = args
+        self.kwargs = kwargs
+        self.identifier = identifier
+        self.rerrs = {}
+        self.phierrs = {}
+        self.zerrs = {}
+    def initialize_particle(self):
+        tim = timer()
+        self.part = particleLB(copy.deepcopy(self.groundtruth.xcart), copy.deepcopy(self.groundtruth.vcart), *self.args, **self.kwargs)
+        tim.tick('init')
+        self.inittime = tim.timeto('init')
+    def evaluate_particle(self):
+        self.history= np.zeros( (6, len(self.groundtruth.ts) ) )
+        tim = timer()
+        for i,t in enumerate(self.groundtruth.ts):
+            r,phi, rdot, vphi = self.part.rphi(t)
+            z,vz = self.part.zvz(t)
+            self.history[:,i] = [r, phi, rdot, vphi, z,vz]
+        tim.tick('eval')
+        self.evaltime = tim.timeto('eval')
+
+    def runtime(self, neval=10):
+        return self.inittime + self.evaltime*float(neval)/float(len(self.groundtruth.ts))
+    def isparticle(self):
+        return True
+    def estimate_errors(self, tr, identifier):
+        timerangeA = np.argmin(np.abs(tr[0] - self.groundtruth.ts))
+        timerangeB = np.argmin(np.abs(tr[1] - self.groundtruth.ts))
+        #timerange = [ self.groundtruth.ts[timerangeA], self.groundtruth.ts[timerangeB] ]
+        timerange = [timerangeA, timerangeB]
+        if tr[1] > np.max(self.groundtruth.ts):
+            timerange[1] = None
+
+        #print("timerange: ",timerange)
+
+        resid_r = np.sqrt( self.groundtruth.partarray[0,:]**2+ self.groundtruth.partarray[1,:]**2) - self.history[0,:]
+        dphis_zero = (np.arctan2( self.groundtruth.partarray[1,:], self.groundtruth.partarray[0,:]) - self.history[1,:]) % (2.0*np.pi)
+        dphis_zero[dphis_zero>np.pi] = dphis_zero[dphis_zero>np.pi] - 2.0*np.pi
+        dphis_zero = dphis_zero * self.history[0,:] # unwrap to dy.
+        resid_z = self.groundtruth.partarray[2,:] - self.history[4,:]
+
+        self.rerrs[identifier] = rms( resid_r[timerange[0]:timerange[1]] )
+        self.phierrs[identifier] = rms( dphis_zero[timerange[0]:timerange[1]] )
+        self.zerrs[identifier] = rms( resid_z[timerange[0]:timerange[1]] )
+
+
+class integration_benchmarker:
+    def __init__(self,groundtruth,identifier,args,kwargs):
+        self.groundtruth = groundtruth
+        self.args = args
+        self.kwargs = kwargs
+        self.identifier = identifier
+        self.rerrs = {}
+        self.zerrs = {}
+        self.runtimes = {}
+        self.herrs = {}
+        self.epserrs = {}
+        self.apoerrs = {}
+        self.perierrs = {}
+    def run(self):
+        tim = timer()
+        #res = scipy.integrate.solve_ivp( particle_ivp2, [0,np.max(self.ts)], ics, vectorized=True, atol=1.0e-10, rtol=1.0e-10, t_eval=ts ) # RK4 vs DOP853 vs BDF.
+        ics = np.zeros(6)
+        ics[:3] = self.groundtruth.xcart[:]
+        ics[3:] = self.groundtruth.vcart[:]
+        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts)], ics, *self.args, t_eval=self.groundtruth.ts, **self.kwargs ) # RK4 vs DOP853 vs BDF.
+        tim.tick('run')
+        self.partarray = res.y
+        self.runtim= tim.timeto('run')
+    def runtime(self):
+        return self.runtim
+    def isparticle(self):
+        return False
+    def estimate_errors(self, tr, identifier, psir=None, nu0=None):
+        timerangeA = np.argmin(np.abs(tr[0] - self.groundtruth.ts))
+        timerangeB = np.argmin(np.abs(tr[1] - self.groundtruth.ts))
+        timerange = [timerangeA, timerangeB]
+        if tr[1] > np.max(self.groundtruth.ts):
+            timerange[1] = None
+
+        self.rerrs[identifier] = rms( np.sqrt(self.partarray[0,timerange[0]:timerange[1]]**2 + self.partarray[1,timerange[0]:timerange[1]]**2) - np.sqrt(self.groundtruth.partarray[0,timerange[0]:timerange[1]]**2 + self.groundtruth.partarray[1,timerange[0]:timerange[1]]**2) )
+        self.zerrs[identifier] = rms( self.partarray[2,timerange[0]:timerange[1]]-self.groundtruth.partarray[2,timerange[0]:timerange[1]] )
+
+        tim = timer()
+        ics = np.zeros(6)
+        ics[:3] = self.groundtruth.xcart[:]
+        ics[3:] = self.groundtruth.vcart[:]
+        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts[timerange[0]:timerange[1]])], ics, *self.args, t_eval=self.groundtruth.ts[timerange[0]:timerange[1]], **self.kwargs ) 
+        tim.tick('run')
+        self.runtimes[identifier] = tim.timeto('run')
+
+        if not psir is None:
+            partStart = particleLB(self.partarray[:3,0], self.partarray[3:,0], psir, nu0, None, quickreturn=True, zopt='integrate')
+            partEnd = particleLB(self.partarray[:3,timerange[0]], self.partarray[3:,timerange[0]], psir, nu0, None, quickreturn=True, zopt='integrate')
+            self.herrs[identifier] = (partEnd.h - partStart.h)/partStart.h
+            self.epserrs[identifier] = (partEnd.epsilon - partStart.epsilon)/partStart.epsilon
+            self.apoerrs[identifier] = (partEnd.apo - partStart.apo)/partStart.apo
+            self.perierrs[identifier] = (partEnd.peri - partStart.peri)/partStart.peri
+
+
+
+
 def benchmark():
     psir = logpotential(220.0)
-    nu = np.sqrt(4.0 * np.pi * G * 0.2)
-
+    nu0 = np.sqrt(4*np.pi*G*0.2)
     xCart = np.array([8100.0, 0.0, 21.0])
     vCart = np.array([10.0, 230.0, 10.0])
+    ordertime=8
+    ordershape=8
+    ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr
 
-    ordertime = 8
-    ordershape = 8
-    tim = timer()
+    lbpre = lbprecomputer.load( 'big_30_1000_alpha2p2_lbpre.pickle' )
 
-    # things to vary: orders, nchi, (nk, velocity distance from progenitor)
-    # things to check: error in r (purely dependent on time treatment!)
-    # error in phi (may depend on ordershape in addition to time errors)
-    # also record time so we can meaingfully trade expense with accuracy.
+    Npart = 8
+    #results = np.zeros((49,Npart))
 
-    partQuick = particleLB(xCart, vCart, psir, nu, None, quickreturn=True)
-    tim.tick('Initialize progenitor')
-    #    lbpre = lbprecomputer(ordertime, ordershape, psir, partQuick.e, 1000, 1000, vwidth=10 )
-    #    tim.tick('precomputer')
-    #    part = particleLB(xCart, vCart, psir, nu, lbpre, ordershape=ordershape, ordertime=ordertime, profile=True )
-    #    tim.tick('full initialize with profiler')
+    results = np.zeros( (10,Npart) ,dtype=object) # 10 configurations to test, with Npart orbits.
 
-    lbpre = lbprecomputer.load('big_10_1000_lbpre.pickle')
-    tim.tick('load precomputer')
+    argslist = []
+    kwargslist = []
+    ids = []
+    colors = []
 
-    # precompute_inverses_up_to(lbpre, 1001)
-    # tim.tick('precompute inverses')
+    argslist.append( (psir, nu0, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
+    ids.append( r'Single Integration - $n_\chi=100$' )
+    colors.append('r')
 
-    print('****')
-    tim.report()
+    argslist.append( (psir, nu0, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':1000} )
+    ids.append( r'Single Integration - $n_\chi=1000$' )
+    colors.append('k')
 
-    Nboot = 100
-    results = np.zeros((14, Nboot * 100))
-    for ii in tqdm(range(Nboot)):
-        timmy = timer()
-        # nchi = int( 10**(np.random.random()*2+1) ) # minimum of 10 maximum of 10^4?
-        nchi = 1000
-        # ordershape = int(np.random.random() * 7 +1)
-        ordershape = int(10 ** (1 + np.random.random() * 2))
-        ordertime = int(np.random.random() * 7 + 1)
-        # nk = int( 10**(np.random.random()*1.5+1.5) )
-        nk = lbpre.N
+    argslist.append( (psir, nu0, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':20} )
+    ids.append( r'Single Integration - $n_\chi=20$' )
+    colors.append('pink')
 
-        # print("computing lbpre with orders: ",ordertime,ordershape," and nchi and nk: ",nchi,nk)
-        # lbpre = lbprecomputer(ordertime, ordershape, psir, partQuick.e, nchi, nk, vwidth=50 )
-        timmy.tick('lbpre')
+    argslist.append( (psir, nu0, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'first', 'nchis':20} )
+    ids.append( r'1st Order - $n_\chi=20$' )
+    colors.append('yellow')
 
-        # subsample velocities so we don't spend 1000% of our time recomputing lbpre
+    argslist.append( (psir, nu0, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'zero', 'nchis':1000} )
+    ids.append( r'Fiore 0th Order' )
+    colors.append('blue')
 
-        # one thing I'd like to do here is compare /relative/ errors. In principle
-        for j in range(100):
-            dvcart = np.random.randn(3) * 10.0
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-10, 'rtol':1.0e-10, 'method':'RK45'} )
+    ids.append(r'RK4 $\epsilon\sim 10^{-10}$')
+    colors.append('gray')
 
-            if j == 0:
-                dvcart = np.zeros(3)  # try something
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-10, 'rtol':1.0e-10, 'method':'DOP853'} )
+    ids.append(r'DOP853 $\epsilon\sim 10^{-10}$')
+    colors.append('maroon')
 
-            vCartThis = vCart + dvcart
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-10, 'rtol':1.0e-10, 'method':'BDF'} )
+    ids.append(r'BDF $\epsilon\sim 10^{-10}$')
+    colors.append('darkblue')
 
-            part = particleLB(xCart, vCartThis, psir, nu, lbpre, ordershape=ordershape, ordertime=ordertime)
-            timmy.tick('initialize' + str(j))
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-5, 'rtol':1.0e-5, 'method':'RK45'} )
+    ids.append(r'RK4 $\epsilon\sim 10^{-5}$')
+    colors.append('orange')
 
-            ts = np.linspace(0, 10000.0, 1000)  # 10 Gyr
-            tprev = ts[0]
-            partarray = np.zeros((6, len(ts)))
-            partarray[:, 0] = [xCart[0], xCart[1], 0.0, vCartThis[0], vCartThis[1], 0.0]
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-5, 'rtol':1.0e-5, 'method':'DOP853'} )
+    ids.append(r'DOP853 $\epsilon\sim 10^{-5}$')
+    colors.append('purple')
 
-            # integrate
-            for i, t in enumerate(ts):
-                if i > 0:
-                    res = scipy.integrate.solve_ivp(particle_ivp, [tprev, t], partarray[:, i - 1], vectorized=True,
-                                                    rtol=1.0e-12, atol=1.0e-8)
-                    partarray[:, i] = res.y[:, -1]
-                    tprev = t
-            timmy.tick('integrate' + str(j))
+    for ii in tqdm(range(Npart)):
+        stri = str(ii).zfill(3)
 
-            history = np.zeros((4, len(ts)))
-            for i, t in enumerate(ts):
-                r, phi, rdot, vphi = part.rphi(t)
-                history[:, i] = [r, phi, rdot, vphi]
-            timmy.tick('evaluate' + str(j))
+        dv = np.random.randn(3)*25.0
+        vCartThis = vCart + dv
+        
+        gt = benchmark_groundtruth( ts, xCart, vCartThis )
+        gt.run()
 
-            resid_r = np.sqrt(partarray[0, :] ** 2 + partarray[1, :] ** 2) - history[0, :]
+        for j in range(len(argslist)):
+            if 'ordershape' in kwargslist[j].keys():
+                # these are the options for a particlelb, so we need to use a particle_benchmarker. This logic could probably be put into benchmarker_factory class.
+                results[j,ii] = particle_benchmarker(gt,ids[j],argslist[j],kwargslist[j])
+                results[j,ii].initialize_particle()
+                results[j,ii].evaluate_particle()
+                results[j,ii].estimate_errors([9000,10000],'lastgyr')
+                results[j,ii].estimate_errors([200,300],'200myr')
+                results[j,ii].estimate_errors([900,1000],'1gyr')
+            else:
+                results[j,ii] = integration_benchmarker(gt,ids[j],argslist[j],kwargslist[j])
+                results[j,ii].run()
+                results[j,ii].estimate_errors([9000,10000],'lastgyr', psir=psir,nu0=nu0)
+                results[j,ii].estimate_errors([200,300],'200myr')
+                results[j,ii].estimate_errors([900,1000],'1gyr', psir=psir,nu0=nu0)
 
-            dphis = (np.arctan2(partarray[1, :], partarray[0, :]) - history[1, :]) % (2.0 * np.pi)
-            dphis[dphis > np.pi] = dphis[dphis > np.pi] - 2.0 * np.pi
-            dphis = dphis * history[0, :]  # unwrap to dy.
 
-            results[0, ii * 100 + j] = ordertime
-            results[1, ii * 100 + j] = ordershape
-            results[2, ii * 100 + j] = nchi
-            results[3, ii * 100 + j] = nk
-            results[4, ii * 100 + j] = dvcart[0]
-            results[5, ii * 100 + j] = dvcart[1]
-            results[6, ii * 100 + j] = dvcart[2]
-            results[7, ii * 100 + j] = part.e
-            results[8, ii * 100 + j] = np.sqrt(np.mean(resid_r[-100:] ** 2))
-            results[9, ii * 100 + j] = np.sqrt(np.mean(dphis[-100:] ** 2))
-            results[10, ii * 100 + j] = timmy.timeto('initialize' + str(j))
-            results[11, ii * 100 + j] = timmy.timeto('integrate' + str(j))
-            results[12, ii * 100 + j] = timmy.timeto(
-                'evaluate' + str(j))  # keep in mind this is 100 evaluations, not just one
-            results[13, ii * 100 + j] = np.sqrt(np.sum(dvcart * dvcart))  # timmy.timeto('lbpre')
+    alpha = 0.9
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if not results[j,0].isparticle():
+            ax.scatter( [results[j,ii].runtimes['lastgyr'] for ii in range(Npart)], [results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=0, alpha=alpha )
+            ax.scatter( [results[j,ii].runtimes['200myr'] for ii in range(Npart)], [results[j,ii].zerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='+', alpha=alpha )
+            ax.scatter( [results[j,ii].runtimes['1gyr'] for ii in range(Npart)], [results[j,ii].zerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=0, alpha=alpha )
+        else:
+            ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=0, alpha=alpha )
+            ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='+', alpha=alpha )
+            ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=0, alpha=alpha )
+    ax.set_xlabel(r'Evaluation Time (s)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel(r'RMS Error in z (pc)')
+    ax.legend()
+    ax2 = ax.twinx()
+    ax2.scatter([0],[0], c='k', marker='o', label='10 Gyr')
+    ax2.scatter([0],[0], c='k', marker='s', label='1 Gyr')
+    ax2.scatter([0],[0], c='k', marker='+', label='0.2 Gyr')
+    ax2.get_yaxis().set_visible(False)
+    ax2.legend()
 
-            if results[8, ii * 100 + j] > 3.0:
-                # huuuuge error or so I thought.
-                # pdb.set_trace()
-                # pass # yikes!
-                print('rms r:', results[8, ii * 100 + j])
+    fig.savefig('benchmark_zt.png', dpi=300)
+    plt.close(fig)
 
-        # save at intermediate steps too
-        np.savetxt('benchmark.txt', results[:, :ii * 100 + j].T,
-                   header='ordertime,ordershape,nchi,nk,dvx,dvy,dvz,e,rmsR,rmsPhi,timetoInitialize,timetoIntegrate,timetoEvaluate,vmag')
 
-        timmy.report()  # have to see what the heck is taking so long
-
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            pass
+        else:
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].herrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='o', lw=0, alpha=alpha, label=ids[j] )
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].epserrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='s', lw=0, alpha=alpha )
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].apoerrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='<', lw=0, alpha=alpha )
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].perierrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='>', lw=0, alpha=alpha )
+    ax.set_xlabel(r'RMS Error in z (pc)')
+    ax.set_ylabel(r'Errors in conserved quantities')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.legend(loc='lower right')
+    ax2 = ax.twinx()
+    ax2.scatter([0],[0], c='k', marker='o', label='h')
+    ax2.scatter([0],[0], c='k', marker='s', label=r'$\epsilon$')
+    ax2.scatter([0],[0], c='k', marker='>', label='Peri')
+    ax2.scatter([0],[0], c='k', marker='<', label='Apo')
+    ax2.get_yaxis().set_visible(False)
+    ax2.legend(loc='upper left')
+    fig.savefig('benchmark_zh.png')
+    plt.close(fig)
 
 def getPolarFromCartesianXV(xv):
     x = xv[0, :]
@@ -1326,7 +1623,6 @@ def findClosestApproach(orb1, orb2, tmin):
         xcart2 = np.array(solnOrb2.xabs(t - trefOrb2))
         return np.sum((xcart1 - xcart2) ** 2)
 
-    # this may be the stupidest algorithm I've ever implemented
 
     ts = np.linspace(tmin + 0.001, tmin + 1.0 / orb1.stitchedSolutions[0].Omega + 1.0 / orb2.stitchedSolutions[0].Omega,
                      1000)
