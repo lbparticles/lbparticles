@@ -98,8 +98,6 @@ class lbprecomputer:
 
         self.generate_interpolators()
 
-        self.save()
-
     def invert(self, ordershape):
         # do matrix inversions too, because why not.
 
@@ -207,7 +205,7 @@ class lbprecomputer:
         self.N = self.N + nnew
         self.generate_interpolators()
 
-        self.save()
+        return self
 
     def save(self):
         with open(self.identifier + '_lbpre.pickle', 'wb') as f:
@@ -1196,9 +1194,11 @@ def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logpotential(220.0), shap
                filename=None):
     if filename == None:
         lbpre = lbprecomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
+        lbpre.save()
         return 0
     lbpre = lbprecomputer.load(filename)
     lbpre.add_new_data(1000)
+    lbpre.save()
     return 0
 
 
