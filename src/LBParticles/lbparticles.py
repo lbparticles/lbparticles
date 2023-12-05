@@ -1194,12 +1194,10 @@ def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logpotential(220.0), shap
                filename=None):
     if filename == None:
         lbpre = lbprecomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
-        lbpre.save()
-        return 0
+        return lbpre
     lbpre = lbprecomputer.load(filename)
     lbpre.add_new_data(1000)
-    lbpre.save()
-    return 0
+    return lbpre
 
 
 def coszeros(ordN):
