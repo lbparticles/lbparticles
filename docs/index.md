@@ -17,6 +17,14 @@ pages/implement_a_potential
 pages/api
 ```
 
+
+## Units 
+
+Internally the code uses the parsec-solar mass-Myr system. The main advantage of this system is that a km/s is very close to a parsec/Myr, though they are different by a few percent.
+
+The code's cartesian coordinate system is such that the x-y plane at z=0 is the midplane of the disk. The origin (x=y=z=0) is the center of the disk and of the spherical potential. 
+
+
 ## Attribution
 
 If you make use of this code, please cite (TODO):

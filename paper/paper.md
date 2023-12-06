@@ -28,20 +28,15 @@ bibliography: paper.bib
 
 # Summary
 
+Does thing :)
 
 # Statement of need
 
 
-# Mathematics
-
-
-# Citations
-
-
-# Figures
-
 
 # Acknowledgements
 
+Rutherford Discovery Fellowships
+University of Canterbury Scholarships
 
 # References
