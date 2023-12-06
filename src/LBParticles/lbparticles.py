@@ -1608,58 +1608,7 @@ class perturbedParticle:
         else:
             assert False
 
-def distance(t,orb1,orb2):
-    assert t >= tmin
-    trefOrb1, solnOrb1 = orb1.getpart(t)
-    trefOrb2, solnOrb2 = orb2.getpart(t)
 
-    xcart1 = np.array(solnOrb1.xabs(t - trefOrb1))
-    xcart2 = np.array(solnOrb2.xabs(t - trefOrb2))
-    return np.sqrt(np.sum((xcart1 - xcart2) ** 2))
-
-
-def findClosestApproach(orb1, orb2, tmin):
-    # Find the /first/ local minimum in the distance between orb1 and orb2 /after/ tmin.
-    # orb1 and orb2 
-
-    ts = np.linspace(tmin + 0.001, tmin + orb1.stitchedSolutions[0].Tr + orb2.stitchedSolutions[0].Tr,
-                     1000)
-    dis = []
-    for t in ts:
-        dis.append(distance(t,orb1,orb2))
-    delta = dis[1:] - dis[:-1]
-    optimum = delta[1:] * delta[:-1]
-    del_opt = delta[(optimum < 0)]
-    time_opt = ts[(del_opt < 0)+1]
-    #res = scipy.optimize.minimize_scalar(dist2, bracket=(ts[ii - 1], ts[ii + 1]))
-    return time_opt[0]
-
-
-def applyPerturbation(orbISO, orbStar, tPerturb, mstar):
-    # Assume tPerturb is the relevant time of closest approach. The ISO, whose 'perturbedParticle' orbit
-
-    trefISO, solnISO = orbISO.getpart(tPerturb)
-    trefStar, solnStar = orbStar.getpart(tPerturb)
-
-    xcartStar = solnStar.xabs(tPerturb - trefStar)
-    vcartStar = solnStar.vabs(tPerturb - trefStar)
-
-    xcartISO = solnISO.xabs(tPerturb - trefISO)
-    vcartISO = np.array(solnISO.vabs(tPerturb - trefISO))
-
-    # initial
-    vrel = np.array(vcartISO) - np.array(vcartStar)
-    xrel = np.array(xcartISO) - np.array(xcartStar)
-
-    b = np.sqrt(np.sum(xrel ** 2))
-    V0 = np.sqrt(np.sum(vrel ** 2))
-
-    dvperp = 2 * b * V0 ** 3 / (G * mstar) * 1.0 / (1.0 + b * b * V0 ** 4 / (G * G * mstar * mstar))
-    dvpar = 2.0 * V0 / (1.0 + b * b * V0 ** 4 / (G * G * mstar * mstar))
-
-    vnew = vcartISO - dvpar * vrel / V0 - dvperp * xrel / b
-
-    return vnew
 
 
 if __name__ == '__main__':
