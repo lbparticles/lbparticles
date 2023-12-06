@@ -1,11 +1,10 @@
 ---
-title: 'LBParticles: '
+title: 'LBParticles: Particle Orbit Model Python Package'
 tags:
   - Python
   - Astronomy
   - Interstellar Objects
-  - Lynden Bell
-  - Model
+  - Particle Orbit Model
 authors:
 - name: John C. Forbes
     orcid: 0000-0002-1975-4449
@@ -28,7 +27,7 @@ bibliography: paper.bib
 
 # Summary
 
-Does thing :)
+`LBParticles` is a Python Package that models particle orbits in central potentials on a galaxy scale. The model conserves quantities (Specific) where numerical integrations of the equations of motion would not due to numerical inaccuracies. It also has a faster computation speed than integration methods due to valid approximations of analyitical equations. This methodology builds upon Lynden-Bell's previous work '@LyndenBound2015:2015'.
 
 # Statement of need
 
