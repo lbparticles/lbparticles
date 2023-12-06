@@ -290,7 +290,7 @@ class hernquistpotential:
     def vc(self, r):
         return np.sqrt(G*self.mass*r)/(r+self.scale)
 
-    def Omega(self, r):
+    def Omega(self, r): #TODO CREATE ISSUE
         return vc(r)/r
 
     def gamma(self,r):
