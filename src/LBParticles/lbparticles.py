@@ -1608,31 +1608,31 @@ class perturbedParticle:
         else:
             assert False
 
+def distance(t,orb1,orb2):
+    assert t >= tmin
+    trefOrb1, solnOrb1 = orb1.getpart(t)
+    trefOrb2, solnOrb2 = orb2.getpart(t)
+
+    xcart1 = np.array(solnOrb1.xabs(t - trefOrb1))
+    xcart2 = np.array(solnOrb2.xabs(t - trefOrb2))
+    return np.sqrt(np.sum((xcart1 - xcart2) ** 2))
+
 
 def findClosestApproach(orb1, orb2, tmin):
     # Find the /first/ local minimum in the distance between orb1 and orb2 /after/ tmin.
     # orb1 and orb2 
-    def dist2(t):
-        assert t >= tmin
-        trefOrb1, solnOrb1 = orb1.getpart(t)
-        trefOrb2, solnOrb2 = orb2.getpart(t)
 
-        xcart1 = np.array(solnOrb1.xabs(t - trefOrb1))
-        xcart2 = np.array(solnOrb2.xabs(t - trefOrb2))
-        return np.sum((xcart1 - xcart2) ** 2)
-
-
-    ts = np.linspace(tmin + 0.001, tmin + 1.0 / orb1.stitchedSolutions[0].Omega + 1.0 / orb2.stitchedSolutions[0].Omega,
+    ts = np.linspace(tmin + 0.001, tmin + orb1.stitchedSolutions[0].Tr + orb2.stitchedSolutions[0].Tr,
                      1000)
-    ds = np.array(ts.shape)
-    for i, t in enumerate(ts):
-        ds[i] = dist2(t)
-
-    ii = np.argmin(ds)
-    assert ii != 0 and ii != len(ts) - 1  # pathological cases that I'm sure we'll encounter
-
-    res = scipy.optimize.minimize_scalar(dist2, bracket=(ts[ii - 1], ts[ii + 1]))
-    return res.x
+    dis = []
+    for t in ts:
+        dis.append(distance(t,orb1,orb2))
+    delta = dis[1:] - dis[:-1]
+    optimum = delta[1:] * delta[:-1]
+    del_opt = delta[(optimum < 0)]
+    time_opt = ts[(del_opt < 0)+1]
+    #res = scipy.optimize.minimize_scalar(dist2, bracket=(ts[ii - 1], ts[ii + 1]))
+    return time_opt[0]
 
 
 def applyPerturbation(orbISO, orbStar, tPerturb, mstar):
