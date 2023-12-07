@@ -12,3 +12,5 @@ dist
 .idea
 venv
 .venv
+.DS_Store
+/paper
