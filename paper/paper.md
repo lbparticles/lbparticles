@@ -1,5 +1,5 @@
 ---
-title: 'LBParticles: Particle Orbit Model Python Package'
+title: 'LBParticles: Python Package for Modelling Particle Orbits'
 tags:
   - Python
   - Astronomy
