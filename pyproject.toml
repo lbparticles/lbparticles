@@ -1,12 +1,12 @@
 [project]
-name = "LBParticles"
-version = "0.0.2"
+name = "lbparticles"
+version = "0.0.3"
 authors = [
     { name = "John Forbes", email = "john.forbes@canterbury.ac.nz" },
     { name = "Jack Patterson", email = "jack.patterson@canterbury.ac.nz" },
     { name = "Angus Forrest", email = "angus.forrest@canterbury.ac.nz" },
 ]
-description = "Lynden Bell Particles"
+description = "Python Package to construct test particle orbits in galaxy. Created for the purpose of investigating interstellar objects."
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
