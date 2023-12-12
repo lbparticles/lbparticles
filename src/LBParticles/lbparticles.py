@@ -529,7 +529,7 @@ class particleLB:
                 coeffs[j] = np.cos(j * timezeroes[i])
             wt_arr[i, :] = coeffs[:] * (self.e * self.e * np.sin(timezeroes[i]) ** 2)
 
-            ui = self.ubar * (1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i])))
+            ui = self.ubar * (1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i]))) # should never need this.
             ui2 = 1.0 / (0.5 * (1.0 / self.perU + 1.0 / self.apoU) * (1.0 - self.e * np.cos(timezeroes[i])))
             assert np.isclose(ui, ui2)
             wtzeroes[i] = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
@@ -876,8 +876,8 @@ class particleLB:
         return resX, resY, z - zref
 
     def nu(self, t):
-        r, phiabs, rdot, vphi = self.rphi(t)
-        return self.nunought * (r / self.rnought) ** (-self.alpha / 2.0)
+        #r, phiabs, rdot, vphi = self.rphi(t)
+        return self.nunought * (self.rvectorized(t) / self.rnought) ** (-self.alpha / 2.0)
 
     def Norb(self, t):
         past_peri = t % self.Tr
@@ -909,8 +909,8 @@ class particleLB:
         ic0 = [1.0, 0.0]
         ic1 = [0.0, 1.0]
         ts = np.linspace( 0, self.Tr, Neval )
-        res0 = scipy.integrate.solve_ivp( to_integrate, [np.min(ts),np.max(ts)], ic0, t_eval=ts, atol=1.0e-7, rtol=1.0e-7, method='DOP853')
-        res1 = scipy.integrate.solve_ivp( to_integrate, [np.min(ts),np.max(ts)], ic1, t_eval=ts, atol=1.0e-7, rtol=1.0e-7, method='DOP853')
+        res0 = scipy.integrate.solve_ivp( to_integrate, [np.min(ts),np.max(ts)], ic0, t_eval=ts, atol=atol, rtol=rtol, method='DOP853', vectorized=True)
+        res1 = scipy.integrate.solve_ivp( to_integrate, [np.min(ts),np.max(ts)], ic1, t_eval=ts, atol=atol, rtol=rtol, method='DOP853', vectorized=True)
 
         z0s = res0.y[0,:]
         vz0s = res0.y[1,:]
@@ -1050,16 +1050,6 @@ class particleLB:
         past_peri = t % self.Tr
         return (t - past_peri) / self.Tr * 2.0 * np.pi + self.chi_of_t(past_peri)
 
-        assert not np.isnan(t)
-
-        def to_zero(chi):
-            return (self.Tr / (2.0 * np.pi)) * (chi - self.Ve * np.sin(chi)) - t
-
-        def to_zero_prime(chi):
-            return (self.Tr / (2.0 * np.pi)) * (1.0 - self.Ve * np.cos(chi))
-
-        res = scipy.optimize.newton(to_zero, t * 2 * np.pi / self.Tr, fprime=to_zero_prime, tol=1.0e-12)
-        return res
 
     def phi(self, eta):
 
@@ -1092,31 +1082,38 @@ class particleLB:
 
     def t(self, chi):
         return self.Tr / (2.0 * np.pi) * (chi - (self.V2 / self.V1 * self.e * np.sin(chi)))
-
+    def r_given_chi(self, chi):
+        return (self.Ubar * (1.0 - self.e*np.cos(chi)))**(1.0/self.k)
+    def u_given_chi(self, chi):
+        return 1.0/(self.Ubar * (1.0 - self.e*np.cos(chi)))
     def eta_given_chi(self, chi):
         # we need to know where we are in the orbit in order to evaluate r and phi.
-        sinchi = np.sin(chi)
-        coschi = np.cos(chi)
+        sinchi = np.asarray(np.sin(chi))
+        coschi = np.asarray(np.cos(chi))
         sqrte = np.sqrt(1 - self.e * self.e)
 
         eta_from_arccos = np.arccos(
             ((1.0 - self.e * self.e) / (1.0 - self.e * coschi) - 1.0) / self.e)  # returns a number between 0 and pi
         # hang on if you have this then you don't need to do anything numeric.
         eta_ret = None
-        if sinchi > 0:
-            # assert np.isclose( to_zero(eta_from_arccos), 0.0)
-            eta_ret = eta_from_arccos
-        else:
-            eta2 = np.pi + (np.pi - eta_from_arccos)
-            # assert np.isclose( to_zero(eta2), 0.0)
-            eta_ret = eta2
+        ret = np.where( sinchi>0, eta_from_arccos, 2*np.pi - eta_from_arccos )
+        return ret
 
-        # at this point we are free to add 2pi as we see fit. Given corrections to phi we can't just leave eta between 0 and 2pi!
-        # We need eta and chi to be 1-to-1. 
-        nrot = (chi - (chi % (2.0 * np.pi))) / (2.0 * np.pi)
-        eta_ret = eta_ret + 2 * np.pi * nrot  # mayybe?
-
-        return eta_ret
+        # defunct, replaced by vectorized version above
+#        if sinchi > 0:
+#            # assert np.isclose( to_zero(eta_from_arccos), 0.0)
+#            eta_ret = eta_from_arccos
+#        else:
+#            eta2 = np.pi + (np.pi - eta_from_arccos)
+#            # assert np.isclose( to_zero(eta2), 0.0)
+#            eta_ret = eta2
+#
+#        # at this point we are free to add 2pi as we see fit. Given corrections to phi we can't just leave eta between 0 and 2pi!
+#        # We need eta and chi to be 1-to-1. 
+#        nrot = (chi - (chi % (2.0 * np.pi))) / (2.0 * np.pi)
+#        eta_ret = eta_ret + 2 * np.pi * nrot  
+#
+#        return eta_ret
 
     #
 
@@ -1131,6 +1128,15 @@ class particleLB:
         return r, self.m0 * phi
         # r given eta.
         # return self.ell / (1.0 + self.e*np.cos( mphi  + 1.0/8 * self.e*self.e*self.W0tw*np.sin(2*mphi)))**(1.0/self.k), mphi
+    def rvectorized(self, t):
+        tPeri = t + self.tperiIC  # time since reference pericenter. When the input t is 0, we want this to be the same as the tPeri we found in init()
+        chi = self.chi_given_tperi(tPeri)
+        return self.r_given_chi(chi)
+        eta = self.eta_given_chi(chi)
+        u = self.ubar * (1.0 + self.e * np.cos(eta)) 
+        r = u ** (-1.0 / self.k)
+        return r
+        
 
     def rphi(self, t):
         # This is where we do all the nontrivial stuff. t,eta,chi, and phi are all defined to be zero at pericenter.
@@ -1352,6 +1358,7 @@ class integration_benchmarker:
         self.epserrs = {}
         self.apoerrs = {}
         self.perierrs = {}
+        self.fixed_time_ages = {}
     def run(self):
         tim = timer()
         #res = scipy.integrate.solve_ivp( particle_ivp2, [0,np.max(self.ts)], ics, vectorized=True, atol=1.0e-10, rtol=1.0e-10, t_eval=ts ) # RK4 vs DOP853 vs BDF.
@@ -1366,6 +1373,16 @@ class integration_benchmarker:
         return self.runtim
     def isparticle(self):
         return False
+    def errs_at_fixed_time(self, t_target, identifier, rtol=0.2): 
+        def to_zero(t):
+            self.estimate_errors( [0.5*t, t], 'test' )
+            return self.runtimes['test'] - t_target
+        res = scipy.optimize.root_scalar( to_zero, method='brentq', bracket=[30, 10000], rtol=rtol )
+
+        self.estimate_errors( [0.5*res.root, res.root], identifier )
+        self.fixed_time_ages[identifier] = res.root
+
+        
     def estimate_errors(self, tr, identifier, psir=None, nu0=None):
         timerangeA = np.argmin(np.abs(tr[0] - self.groundtruth.ts))
         timerangeB = np.argmin(np.abs(tr[1] - self.groundtruth.ts))
@@ -1409,7 +1426,6 @@ def benchmark():
     Npart = 8
     #results = np.zeros((49,Npart))
 
-    results = np.zeros( (10,Npart) ,dtype=object) # 10 configurations to test, with Npart orbits.
 
     argslist = []
     kwargslist = []
@@ -1466,6 +1482,18 @@ def benchmark():
     ids.append(r'DOP853 $\epsilon\sim 10^{-5}$')
     colors.append('purple')
 
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-7, 'rtol':1.0e-7, 'method':'DOP853'} )
+    ids.append(r'DOP853 $\epsilon\sim 10^{-7}$')
+    colors.append('red')
+
+    argslist.append( () )
+    kwargslist.append( {'vectorized':True, 'atol':1.0e-6, 'rtol':1.0e-6, 'method':'DOP853'} )
+    ids.append(r'DOP853 $\epsilon\sim 10^{-6}$')
+    colors.append('pink')
+
+    results = np.zeros( (len(argslist),Npart) ,dtype=object) # 10 configurations to test, with Npart orbits.
+
     for ii in tqdm(range(Npart)):
         stri = str(ii).zfill(3)
 
@@ -1490,6 +1518,7 @@ def benchmark():
                 results[j,ii].estimate_errors([9000,10000],'lastgyr', psir=psir,nu0=nu0)
                 results[j,ii].estimate_errors([200,300],'200myr')
                 results[j,ii].estimate_errors([900,1000],'1gyr', psir=psir,nu0=nu0)
+                results[j,ii].errs_at_fixed_time(0.06, 'fixedtime', rtol=0.2)
 
 
     alpha = 0.9
@@ -1541,6 +1570,24 @@ def benchmark():
     ax2.get_yaxis().set_visible(False)
     ax2.legend(loc='upper left')
     fig.savefig('benchmark_zh.png')
+    plt.close(fig)
+
+
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            pass
+        else:
+            ax.scatter([results[j,ii].fixed_time_ages['fixedtime'] for ii in range(Npart)], [results[j,ii].zerrs['fixedtime'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=0, alpha=alpha)
+    ax.set_xlabel('Time Integrated at Fixed Cost (Myr)')
+    ax.set_ylabel('RMS Error in z (pc)')
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    zep = [results[0,ii].zerrs['lastgyr'] for ii in range(Npart)]
+    ax.axhline( np.mean(zep)+np.std(zep) )
+    ax.axhline( np.mean(zep)-np.std(zep) )
+    ax.legend()
+    fig.savefig('benchmark_fixedt.png')
     plt.close(fig)
 
 def getPolarFromCartesianXV(xv):
