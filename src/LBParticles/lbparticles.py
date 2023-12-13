@@ -1078,9 +1078,11 @@ def coszeros(ordN):
         theZeros[i] = (np.pi / 2.0 + i * np.pi) / ordN
     return theZeros
 
+
 def rms(arr):
     return np.sqrt( np.mean( arr*arr ) )
 
+    
 def getPolarFromCartesianXV(xv):
     x = xv[0, :]
     y = xv[1, :]
@@ -1133,7 +1135,7 @@ class perturbedParticle:
 
     def exists(self, t):
         # check whether the particle has been produced yet
-        return t > self.ts[0]
+        return t >= self.ts[0]
 
     def getpart(self, t):
         i = np.searchsorted(self.ts, t, side='left')
@@ -1143,6 +1145,13 @@ class perturbedParticle:
         if self.exists(t):
             tref, part = self.getpart(t)
             return part.xabs(t - tref)
+        else:
+            assert False
+
+    def xvabs(self, t):
+        if self.exists(t):
+            tref, part = self.getpart(t)
+            return part.xvabs(t - tref)
         else:
             assert False
 
