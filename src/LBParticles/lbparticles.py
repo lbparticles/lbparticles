@@ -258,33 +258,6 @@ class precomputer:
         
         return ret, ret_nu
 
-class logPotential:
-    def __init__(self, vcirc):
-        self.vcirc = vcirc
-
-    def __call__(self, r):
-        return -self.vcirc ** 2 * np.log(r)
-
-    def Omega(self, r):
-        return self.vcirc / r
-
-    def gamma(self, r):
-        # TODO - I don't understand how this is hardcoded?
-        return np.sqrt(2.0)
-
-    def kappa(self, r):
-        res = self.Omega(r)
-        return res * res
-
-    def vc(self, r):
-        return self.vcirc
-
-    def ddr(self, r):
-        return -self.vcirc ** 2 / r
-
-    def ddr2(self, r):
-        return self.vcirc ** 2 / (r * r)
-
 class particle:
     # use orbits from Lynden-Bell 2015.
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
@@ -977,6 +950,33 @@ class particle:
 
         return r, phiabs, rdot, vphi
 
+class logPotential:
+    def __init__(self, vcirc):
+        self.vcirc = vcirc
+
+    def __call__(self, r):
+        return -self.vcirc ** 2 * np.log(r)
+
+    def Omega(self, r):
+        return self.vcirc / r
+
+    def gamma(self, r):
+        # TODO - I don't understand how this is hardcoded?
+        return np.sqrt(2.0)
+
+    def kappa(self, r):
+        res = self.Omega(r)
+        return res * res
+
+    def vc(self, r):
+        return self.vcirc
+
+    def ddr(self, r):
+        return -self.vcirc ** 2 / r
+
+    def ddr2(self, r):
+        return self.vcirc ** 2 / (r * r)
+
 class perturbationWrapper:
     """
     perturbationWrapper:
@@ -984,11 +984,11 @@ class perturbationWrapper:
     This class is used to serve the kinematics of a given particle at different times after it has been perturbed.
 
     This is done by using multiple particles and splicing them together at closest approach.
-    
+
     Thus the class takes a list of particles and splice times as its data structure.
     """
     def __init__(self):
-        self.particles = []  # each element i is the particle's trajectory from time ts[i] to ts[i+1]
+        self.particles = []
         self.splice_ts = []
 
     def add(self, t, part):
@@ -1017,18 +1017,6 @@ class perturbationWrapper:
         else:
             assert False
 
-def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
-    if not hasattr(lbpre, 'shapezeros') or hardreset:
-        lbpre.shapezeros = {}
-    if not hasattr(lbpre, 'Warrs') or hardreset:
-        lbpre.Warrs = {}
-
-    for shapeorder in range(maxshapeorder + 1, -1, -1):
-        W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
-        lbpre.Warrs[shapeorder] = W_inv_arr
-        lbpre.shapezeros[shapeorder] = shapezeroes
-    lbpre.save()
-
 def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logPotential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
                filename=None):
     if filename == None:
@@ -1047,7 +1035,19 @@ def coszeros(ordN):
         theZeros[i] = (np.pi / 2.0 + i * np.pi) / ordN
     return theZeros
 
-def getPolarFromCartesianXV(xv):
+def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
+    if not hasattr(lbpre, 'shapezeros') or hardreset:
+        lbpre.shapezeros = {}
+    if not hasattr(lbpre, 'Warrs') or hardreset:
+        lbpre.Warrs = {}
+
+    for shapeorder in range(maxshapeorder + 1, -1, -1):
+        W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
+        lbpre.Warrs[shapeorder] = W_inv_arr
+        lbpre.shapezeros[shapeorder] = shapezeroes
+    lbpre.save()
+
+def cart_to_pol_xv(xv):
     x = xv[0, :]
     y = xv[1, :]
     z = xv[2, :]
@@ -1062,7 +1062,7 @@ def getPolarFromCartesianXV(xv):
 
     return np.vstack([r, theta, z, u, v, vz])
 
-def getPolarFromCartesian(xcart, vcart):
+def cart_to_pol(xcart, vcart):
     x, y, z = xcart
     vx, vy, vz = vcart
 
@@ -1073,7 +1073,7 @@ def getPolarFromCartesian(xcart, vcart):
 
     return (r, theta, z), (u, v, vz)
 
-def getCartesianFromPolar(xpol, vpol):
+def pol_to_cart(xpol, vpol):
     r, theta, z = xpol
     u, vincl, w = vpol  # vincl includes the circular velocity
 
