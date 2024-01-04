@@ -974,85 +974,7 @@ class particle:
 
         return r, phiabs, rdot, vphi
 
-def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
-    if not hasattr(lbpre, 'shapezeros') or hardreset:
-        lbpre.shapezeros = {}
-    if not hasattr(lbpre, 'Warrs') or hardreset:
-        lbpre.Warrs = {}
-
-    for shapeorder in range(maxshapeorder + 1, -1, -1):
-        W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
-        lbpre.Warrs[shapeorder] = W_inv_arr
-        lbpre.shapezeros[shapeorder] = shapezeroes
-    lbpre.save()
-
-
-def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logpotential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
-               filename=None):
-    if filename == None:
-        lbpre = precomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
-        return lbpre
-    lbpre = precomputer.load(filename)
-    lbpre.add_new_data(1000)
-    return lbpre
-
-
-def coszeros(ordN):
-    ''' Finds the first ordN zeros of cos(ordN theta).'''
-    # cos x = 0 for x=pi/2 + k pi for k any integer
-    # so is it just as simple as...
-    theZeros = np.zeros(ordN)
-    for i in range(ordN):
-        theZeros[i] = (np.pi / 2.0 + i * np.pi) / ordN
-    return theZeros
-
-
-def rms(arr):
-    return np.sqrt( np.mean( arr*arr ) )
-
-    
-def getPolarFromCartesianXV(xv):
-    x = xv[0, :]
-    y = xv[1, :]
-    z = xv[2, :]
-    vx = xv[3, :]
-    vy = xv[4, :]
-    vz = xv[5, :]
-
-    r = np.sqrt(x * x + y * y)
-    theta = np.arctan2(y, x)
-    u = (x * vx + y * vy) / r
-    v = (x * vy - vx * y) / r
-
-    return np.vstack([r, theta, z, u, v, vz])
-
-
-def getPolarFromCartesian(xcart, vcart):
-    x, y, z = xcart
-    vx, vy, vz = vcart
-
-    r = np.sqrt(x * x + y * y)
-    theta = np.arctan2(y, x)
-    u = (x * vx + y * vy) / r
-    v = (x * vy - vx * y) / r
-
-    return (r, theta, z), (u, v, vz)
-
-
-def getCartesianFromPolar(xpol, vpol):
-    r, theta, z = xpol
-    u, vincl, w = vpol  # vincl includes the circular velocity
-
-    x = r * np.cos(theta)
-    y = r * np.sin(theta)
-    vx = u * np.cos(theta) - vincl * np.sin(theta)
-    vy = u * np.sin(theta) + vincl * np.cos(theta)
-
-    return (x, y, z), (vx, vy, w)
-
-
-# handle time/accounting - refer the querier to the correct unperturbedParticle solution, i.e. where the particle is on its epicycle.
-class perturbedParticle:
+class perturbation_wrapper:
     def __init__(self):
         self.stitchedSolutions = []  # each element i is the particle's trajectory from time ts[i] to ts[i+1]
         self.ts = []
@@ -1083,3 +1005,69 @@ class perturbedParticle:
         else:
             assert False
 
+def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
+    if not hasattr(lbpre, 'shapezeros') or hardreset:
+        lbpre.shapezeros = {}
+    if not hasattr(lbpre, 'Warrs') or hardreset:
+        lbpre.Warrs = {}
+
+    for shapeorder in range(maxshapeorder + 1, -1, -1):
+        W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
+        lbpre.Warrs[shapeorder] = W_inv_arr
+        lbpre.shapezeros[shapeorder] = shapezeroes
+    lbpre.save()
+
+def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logpotential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
+               filename=None):
+    if filename == None:
+        lbpre = precomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
+        return lbpre
+    lbpre = precomputer.load(filename)
+    lbpre.add_new_data(1000)
+    return lbpre
+
+def coszeros(ordN):
+    ''' Finds the first ordN zeros of cos(ordN theta).'''
+    # cos x = 0 for x=pi/2 + k pi for k any integer
+    # so is it just as simple as...
+    theZeros = np.zeros(ordN)
+    for i in range(ordN):
+        theZeros[i] = (np.pi / 2.0 + i * np.pi) / ordN
+    return theZeros
+
+def getPolarFromCartesianXV(xv):
+    x = xv[0, :]
+    y = xv[1, :]
+    z = xv[2, :]
+    vx = xv[3, :]
+    vy = xv[4, :]
+    vz = xv[5, :]
+
+    r = np.sqrt(x * x + y * y)
+    theta = np.arctan2(y, x)
+    u = (x * vx + y * vy) / r
+    v = (x * vy - vx * y) / r
+
+    return np.vstack([r, theta, z, u, v, vz])
+
+def getPolarFromCartesian(xcart, vcart):
+    x, y, z = xcart
+    vx, vy, vz = vcart
+
+    r = np.sqrt(x * x + y * y)
+    theta = np.arctan2(y, x)
+    u = (x * vx + y * vy) / r
+    v = (x * vy - vx * y) / r
+
+    return (r, theta, z), (u, v, vz)
+
+def getCartesianFromPolar(xpol, vpol):
+    r, theta, z = xpol
+    u, vincl, w = vpol  # vincl includes the circular velocity
+
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    vx = u * np.cos(theta) - vincl * np.sin(theta)
+    vy = u * np.sin(theta) + vincl * np.cos(theta)
+
+    return (x, y, z), (vx, vy, w)
