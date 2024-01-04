@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation
 # Units throughout are Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
 G = 0.00449987  # pc^3 / (solar mass Myr^2)
 
+# TODO -- Write Exception errors for all the different types of errors that you can encounter while using the package
 
 class precomputer:
     def __init__(self, timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=50):
@@ -220,11 +221,11 @@ class precomputer:
         '''
         assert N<=self.nchis
         return np.linspace(0,self.nchis-1,N, dtype=int)
+    
     def get_chi_arr(self,N):
         ''' A convenience function to find the points where chi is evaluated if N points are requested. See documentation for lbprecomputer::get_chi_index_arr.'''
         inds = self.get_chi_index_arr(N)
         return self.chi_eval[inds]
-
 
     def get_t_terms(self, e, maxorder=None, includeNu=True, nchis=None):
         # interpolate target data to the actual k<-->e.
@@ -257,7 +258,7 @@ class precomputer:
         
         return ret, ret_nu
 
-class logpotential:
+class logPotential:
     def __init__(self, vcirc):
         self.vcirc = vcirc
 
@@ -974,7 +975,7 @@ class particle:
 
         return r, phiabs, rdot, vphi
 
-class perturbation_wrapper:
+class perturbationWrapper:
     def __init__(self):
         self.stitchedSolutions = []  # each element i is the particle's trajectory from time ts[i] to ts[i+1]
         self.ts = []
@@ -1017,7 +1018,7 @@ def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
         lbpre.shapezeros[shapeorder] = shapezeroes
     lbpre.save()
 
-def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logpotential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
+def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=log_potential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
                filename=None):
     if filename == None:
         lbpre = precomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
