@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation
 G = 0.00449987  # pc^3 / (solar mass Myr^2)
 
 
-class lbprecomputer:
+class precomputer:
     def __init__(self, timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=50):
         # enumerate possible k-e combinations.
         # compute integrals for a bunch of them.
@@ -41,7 +41,7 @@ class lbprecomputer:
         for i in range(self.N):
             xCart = [R, 0, 0]
             vCart = [1.0, vs[i], 0]
-            part = particleLB(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
+            part = particle(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
             self.es[i] = part.e
             self.ks[i] = part.k
 
@@ -61,7 +61,7 @@ class lbprecomputer:
         for i in range(self.N):
             xCart = [R, 0, 0]
             vCart = [0.01, vs[i], 0]
-            part = particleLB(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
+            part = particle(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
             self.es[i] = part.e
             self.ks[i] = part.k
 
@@ -137,7 +137,7 @@ class lbprecomputer:
             vCart = vCart0[:]
             vCart[1] = vin
             xCart = xCart0[:]
-            part = particleLB(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
+            part = particle(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
 
             return part.e - ein
 
@@ -156,7 +156,7 @@ class lbprecomputer:
         res = scipy.optimize.brentq(to_zero, a, b, xtol=1.0e-14)
         vCart = vCart0[:]
         vCart[1] = res
-        part = particleLB(xCart0, vCart, self.psir, 1.0, None, quickreturn=True)
+        part = particle(xCart0, vCart, self.psir, 1.0, None, quickreturn=True)
         return part.k
 
     def add_new_data(self, nnew):
@@ -257,47 +257,6 @@ class lbprecomputer:
         
         return ret, ret_nu
 
-
-class hernquistpotential:
-    def __init__(self, scale, mass=None, vcirc=None):
-        ''' Create a hernquistpotential object.
-        Parameters:
-            scale - the scale radius of the potential in parsecs
-            mass - the mass of the material producing the potential, in solar masses
-            vcirc - the circular velocity at r=scale, in pc/Myr (close to km/s)
-        Exactly one of mass or vcirc must be specified (not both)
-        '''
-        # vcirc^2 = G*mass*r/(r+a)^2.
-        # at r=a, vcirc^2 = G*mass*a/4a^2 = G*mass/(4*a)
-        if (mass is None and vcirc is None) or (not mass is None and not vcirc is None):
-            raise Exception("Need to specify exactly one of mass, or vcirc.")
-        if mass is None:
-            self.mass = vcirc*vcirc*4.0*scale/G
-        else:
-            self.mass = mass
-        self.scale = scale
-
-    def __call__(self,r):
-        return G*self.mass/(r+self.scale)
-
-    def vc(self, r):
-        return np.sqrt(G*self.mass*r)/(r+self.scale)
-
-    def Omega(self, r): #TODO CREATE ISSUE
-        return vc(r)/r
-
-    def gamma(self,r):
-        return np.sqrt(3.0 - 2.0*r/(r+self.scale))
-
-    def kappa(self,r):
-        return self.Omega(r)*self.gamma(r)
-
-    def ddr(self, r):
-        return -G*self.mass/(r+self.scale)**2
-
-    def ddr2(self, r):
-        return 2.0*G*self.mass/(r+self.scale)**3
-
 class logpotential:
     def __init__(self, vcirc):
         self.vcirc = vcirc
@@ -323,37 +282,7 @@ class logpotential:
     def ddr2(self, r):
         return self.vcirc ** 2 / (r * r)
 
-def particle_ivp2(t, y ):
-    '''The derivative function for scipy's solve_ivp - used to compare integrated particle trajectories to our semi-analytic versions'''
-    vcirc = 220.0
-    nu0 = np.sqrt(4.0*np.pi*G*0.2)
-    alpha = 2.2
-    # y assumed to be a 6 x N particle array of positions and velocities.
-    xx = y[0,:]
-    yy = y[1,:]
-    zz = y[2,:]
-    vx = y[3,:]
-    vy = y[4,:]
-    vz = y[5,:]
-
-    r = np.sqrt(xx*xx + yy*yy)# + zz*zz)
-    g = -vcirc*vcirc / r
-    nu = nu0 * (r/8100.0)**(-alpha/2.0)
-
-    res = np.zeros( y.shape )
-    res[0,:] = vx
-    res[1,:] = vy
-    res[2,:] = vz
-    res[3,:] = g*xx/r
-    res[4,:] = g*yy/r
-    #res[5,:] = g*zz/r
-    res[5,:] = - zz*nu*nu
-
-
-    return res
-
-
-class particleLB:
+class particle:
     # use orbits from Lynden-Bell 2015.
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
     def __init__(self, xCartIn, vCartIn, psir, nunought, lbpre, rnought=8100.0, ordershape=1, ordertime=1, tcorr=True,
@@ -1045,7 +974,6 @@ class particleLB:
 
         return r, phiabs, rdot, vphi
 
-
 def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
     if not hasattr(lbpre, 'shapezeros') or hardreset:
         lbpre.shapezeros = {}
@@ -1062,9 +990,9 @@ def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
 def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logpotential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
                filename=None):
     if filename == None:
-        lbpre = lbprecomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
+        lbpre = precomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
         return lbpre
-    lbpre = lbprecomputer.load(filename)
+    lbpre = precomputer.load(filename)
     lbpre.add_new_data(1000)
     return lbpre
 
