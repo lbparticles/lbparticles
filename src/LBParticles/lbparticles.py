@@ -1018,7 +1018,7 @@ def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
         lbpre.shapezeros[shapeorder] = shapezeroes
     lbpre.save()
 
-def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=log_potential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
+def buildlbpre(nchis=1000, nks=100, etarget=0.08, psir=logPotential(220.0), shapeorder=100, timeorder=10, alpha=2.2,
                filename=None):
     if filename == None:
         lbpre = precomputer(timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=20)
