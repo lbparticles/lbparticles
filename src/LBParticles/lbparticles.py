@@ -269,10 +269,12 @@ class logPotential:
         return self.vcirc / r
 
     def gamma(self, r):
+        # TODO - I don't understand how this is hardcoded?
         return np.sqrt(2.0)
 
     def kappa(self, r):
-        return self.Omega(r) * self.gamma(r)
+        res = self.Omega(r)
+        return res * res
 
     def vc(self, r):
         return self.vcirc
@@ -976,21 +978,30 @@ class particle:
         return r, phiabs, rdot, vphi
 
 class perturbationWrapper:
+    """
+    perturbationWrapper:
+    
+    This class is used to serve the kinematics of a given particle at different times after it has been perturbed.
+
+    This is done by using multiple particles and splicing them together at closest approach.
+    
+    Thus the class takes a list of particles and splice times as its data structure.
+    """
     def __init__(self):
-        self.stitchedSolutions = []  # each element i is the particle's trajectory from time ts[i] to ts[i+1]
-        self.ts = []
+        self.particles = []  # each element i is the particle's trajectory from time ts[i] to ts[i+1]
+        self.splice_ts = []
 
     def add(self, t, part):
-        self.ts.append(t)
-        self.stitchedSolutions.append(part)
+        self.splice_ts.append(t)
+        self.particles.append(part)
 
     def exists(self, t):
         # check whether the particle has been produced yet
-        return t >= self.ts[0]
+        return t >= self.splice_ts[0]
 
     def getpart(self, t):
         i = np.searchsorted(self.ts, t, side='left')
-        return self.ts[i - 1], self.stitchedSolutions[i - 1]
+        return self.splice_ts[i - 1], self.particles[i - 1]
 
     def xabs(self, t):
         if self.exists(t):
