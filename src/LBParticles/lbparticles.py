@@ -37,17 +37,22 @@ class lbprecomputer:
         self.psir = psir
         vc = self.psir.vc(R)
         self.Necc = Neccs
-        self.N = nks
+        #self.N = nks -- replace with 2 numbers: 
+        #  number of clusters and number of points in initial e-k interpolation
+        self.Ninterp = 1000
+        self.Nclusters = nks
+        self.Nnuk = 5
+
         self.nchis = nchis
         self.vwidth = vwidth
         self.alpha = alpha
         self.logodds_initialized=False
 
         # first pass
-        self.ks = np.zeros(self.N)
-        self.es = np.zeros(self.N)
-        vs = np.linspace(vc / 10, vc * 2, self.N)
-        for i in range(self.N):
+        self.ks = np.zeros(self.Ninterp)
+        self.es = np.zeros(self.Ninterp)
+        vs = np.linspace(vc / 10, vc * 2, self.Ninterp)
+        for i in range(self.Ninterp):
             xCart = [R, 0, 0]
             vCart = [1.0, vs[i], 0]
             part = particleLB(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
@@ -58,7 +63,7 @@ class lbprecomputer:
         vtarget = vs[i]
 
         # do a second pass targeted on a more useful range of velocities <--> e's <--> k's.
-        vs = np.linspace(vtarget - vwidth, vtarget + vwidth, self.N - 22)
+        vs = np.linspace(vtarget - vwidth, vtarget + vwidth, self.Ninterp - 22)
         vs = np.concatenate([vs, np.zeros(22) + 1000])
         vclose_ind = np.argmin(np.abs(vs - vc))
         vclose = np.abs(vs[vclose_ind] - vc)
@@ -67,7 +72,7 @@ class lbprecomputer:
         vclose_ind = np.argmin(np.abs(vs))
         vclose = np.abs(vs[vclose_ind])
         vs[-22:-11] = np.linspace(vclose / 10.0, vclose * 0.9, 11)
-        for i in range(self.N):
+        for i in range(self.Ninterp):
             xCart = [R, 0, 0]
             vCart = [0.01, vs[i], 0]
             part = particleLB(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
@@ -78,33 +83,50 @@ class lbprecomputer:
         vs = vs[valid]
         self.es = self.es[valid]
         self.ks = self.ks[valid]
-        self.N = np.sum(valid)
+        self.Ninterp = np.sum(valid)
 
         self.initialize_e_of_k()
 
-        self.target_data = np.zeros((nchis, self.N, self.Necc,
-                                     timeorder + 2))  # tbd how to interpolate this. rn I'm thinking of doing a 1D interpolation at each chi, then leave the particle to decide how it will interpolate that.
 
-        self.target_data_nuphase = np.zeros((nchis, self.N, self.Necc,
-                                             timeorder + 2))  # tbd how to interpolate this. rn I'm thinking of doing a 1D interpolation at each chi, then leave the particle to decide how it will interpolate that.
+        # currently nchis x Nk x Necc x Ntime
+        # ->>       nchis x Nek x NeccTaylor x Ntime x NkTaylor
+        self.target_data = np.zeros((nchis, self.Nclusters, self.Necc,
+                                     timeorder + 2, self.Nnuk))  
+
+        self.target_data_nuphase = np.zeros((nchis, self.Nclusters, self.Necc,
+                                             timeorder + 2, self.Nnuk))  
+
+
+        self.eclusters = np.linspace(0.05, 0.95, self.Nclusters)
+        self.kclusters = np.zeros(self.Nclusters)
+        for i,e in enumerate(self.eclusters):
+            # find the closest k.
+            ii = np.argmin( np.abs( self.es - e ))
+            self.kclusters[i] = self.ks[ii]
+        self.nukclusters = 2.0/self.kclusters - 1.0
+        self.mukclusters = self.nukclusters - self.alpha/(2.0*self.kclusters)
 
         self.chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
-        for j in tqdm(range(self.N)):
+        for j in tqdm(range(self.Nclusters)):
             for i in range(self.ordertime + 2):
                 for jj in range(self.Necc):
+                    for m in range(self.Nnuk):
                     # t_terms.append(res.y.flatten())
-                    y0,y1 = self.evaluate_integrals( self.chi_eval, jj, self.ks[j], i )
-                    self.target_data[:, j, jj, i] = y0
-                    self.target_data_nuphase[:, j, jj, i] = y1 
+                        y0,y1 = self.evaluate_integrals( self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m )
+                        self.target_data[:, j, jj, i, m] = y0
+                        self.target_data_nuphase[:, j, jj, i, m] = y1 
                     
-        self.generate_interpolators()
+        #self.generate_interpolators()
 
-    def evaluate_integrals( self, chis, jj, kIn, n ):
+    def evaluate_integrals( self, chis, jj, kIn, eIn, n, m ):
         nuk = 2.0 / kIn - 1.0
+        muk = 2.0 / kIn - 1.0 - self.alpha/(2.0*kIn)
+        deltapsi = scipy.special.polygamma(0,nuk+1) - scipy.special.polygamma(0,nuk+1-jj)
+        
         def to_integrate(chi, val):
-            return (1.0 - self.e_of_k(kIn) * np.cos(chi)) ** (nuk-jj) * np.cos(chi)**jj * np.cos(n * chi)
+            return (1.0 - eIn * np.cos(chi)) ** (nuk-jj) * np.cos(chi)**jj * np.cos(n * chi) * (deltapsi + np.log(1.0-eIn*np.cos(chi)))**m
 
-        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi + 0.001], [0], vectorized=True,
+        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi ], [0], vectorized=True,
                                         rtol=1.0e-14, atol=1.0e-14, t_eval=chis, method='DOP853')
         try:
             assert np.all(np.isclose(res.t, self.chi_eval))
@@ -112,10 +134,11 @@ class lbprecomputer:
             pdb.set_trace()
         y0 = res.y.flatten()
 
+        deltapsi = scipy.special.polygamma(0,muk+1) - scipy.special.polygamma(0,muk+1-jj)
         def to_integrate(chi, val):
-            return (1.0 - self.e_of_k(kIn) * np.cos(chi)) ** (nuk - jj - self.alpha / (2.0 * kIn)) * np.cos(n * chi) * np.cos(chi)**jj
+            return (1.0 - eIn * np.cos(chi)) ** (nuk - jj - self.alpha / (2.0 * kIn)) * np.cos(n * chi) * np.cos(chi)**jj * (deltapsi + np.log(1.0-eIn*np.cos(chi)))**m
 
-        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi + 0.001], [0], vectorized=True,
+        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi], [0], vectorized=True,
                                         rtol=1.0e-14, atol=1.0e-14, t_eval=chis, method='DOP853')
         y1 = res.y.flatten()
 
@@ -161,6 +184,7 @@ class lbprecomputer:
         return W_inv_arr, shapezeroes
 
     def generate_interpolators(self):
+        assert False
         sort_k = np.argsort(self.ks)
         sorted_k = self.ks[sort_k]
         self.interpolators = np.zeros((self.ordertime + 2, self.Necc, self.nchis), dtype=object)
@@ -215,6 +239,7 @@ class lbprecomputer:
         return part.k
 
     def add_new_data(self, nnew):
+        assert False
         Nstart = len(self.ks)
 
         # we could choose random values of k, but this is not ideal from a testing/reproducibility perspective or from the perspective of choosing more optimal points.
@@ -279,8 +304,195 @@ class lbprecomputer:
         inds = self.get_chi_index_arr(N)
         return self.chi_eval[inds]
 
+    def get_t_terms(self, kIn, eIn, Necc=None, nchis=None, includeNu=True, maxorder=None, debug=False):
+        if maxorder is None:
+            ordermax = self.ordertime+2
+        else:
+            ordermax = maxorder
+        if ordermax>self.ordertime+2:
+            raise Exception("More orders requested than have been pre-computed in lbprecomputer::get_t_terms")
 
-    def get_t_terms(self, kIn, eIn, maxorder=None, includeNu=True, nchis=None, Necc=None, debug=False):
+        if nchis is None:
+            nchiEval = self.nchis
+        elif nchis <= self.nchis:
+            nchiEval = nchis
+        else:
+            raise Exception("More chi evaluation points requested than have been pre-computed in lbprecomputer::get_t_terms")
+
+        if Necc is None:
+            Neccs = self.Necc
+        elif Necc <= self.Necc:
+            Neccs = Necc
+        else:
+            raise Exception("More terms in the eccentricity series requested than have been pre-computed in lbprecomputer::get_t_terms")
+
+        nuk = 2.0/kIn - 1.0
+        muk = nuk - self.alpha/(2.0*kIn)
+
+        # for now just find the closest cluster...
+        dists = (nuk-self.nukclusters)**2 + (eIn-self.eclusters)**2
+        ii = np.argmin(dists)
+
+        dnuk = nuk - self.nukclusters[ii]
+        
+        self.mukclusters = self.nukclusters - self.alpha/(2.0*self.kclusters)
+        
+        dmuk = muk - self.mukclusters[ii]
+        de = eIn - self.eclusters[ii]
+        chiarr = self.get_chi_index_arr(nchiEval)
+        chivals = self.get_chi_arr(nchiEval)
+        
+        # ok, the thing we want is ordermax x (Necc) x nchi x (Nnuk)
+        # The thing we have is:
+        # ->>       nchis x Nek x NeccTaylor x Ntime x NkTaylor
+        #self.target_data = np.zeros((nchis, self.Nclusters, self.Necc,
+        #                             timeorder + 2, self.Nnuk))  
+
+        #Ts = self.target_data[chiarr, ii, :, :ordermax, :].squeeze() # chi x NeccTaylor x Ntime x NkTaylor ~~ chi x j x n x i
+
+        #to_sum = np.transpose(self.target_data[chiarr, ii, :, :ordermax, :], (2,1,0,3) )
+        #to_sum_nuphase = np.transpose(self.target_data_nuphase[chiarr, ii, :, :ordermax, :], (2,1,0,3) )
+
+        #orders, eccs, chis, ems, peas, eyes = np.meshgrid( np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk), np.arange(self.Nnuk), np.arange(self.Nnuk), indexing='ij')
+        orders, eccs, chis, ems, peas = np.meshgrid( np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk), np.arange(self.Nnuk), indexing='ij')
+
+        # all of this can be pre-computed for each cluster
+        def AprimeNu(order, j):
+            return (scipy.special.polygamma(order,self.nukclusters[ii]+1) - scipy.special.polygamma(order,self.nukclusters[ii]+1-j))
+        def AprimeMu(order, j):
+            return (scipy.special.polygamma(order,self.mukclusters[ii]+1) - scipy.special.polygamma(order,self.mukclusters[ii]+1-j))
+
+        # ohkay
+        j1d = np.arange(Neccs)
+        m1d = np.arange(self.Nnuk)
+        p1d = np.arange(self.Nnuk)
+        i1d = np.arange(self.Nnuk) # these are the same array but for my own sanity I've named them different things.
+
+        p2d,i2d = np.meshgrid( p1d, i1d, indexing='ij')
+        p2d_pm, m2d_pm = np.meshgrid( p1d, m1d, indexing='ij')
+
+
+        _, eccs5d, _, ems5d, peas5d = np.meshgrid( np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk), np.arange(self.Nnuk), indexing='ij')
+        _, _, _, ems4d  = np.meshgrid( np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk), indexing='ij')
+        _, eccs3d, _ = np.meshgrid( np.arange(ordermax), np.arange(Neccs), chiarr, indexing='ij')
+
+
+
+
+
+        ap0nu = AprimeNu(0,j1d)
+        ap1nu = AprimeNu(1,j1d)
+        ap2nu = AprimeNu(2,j1d)
+        ap3nu = AprimeNu(3,j1d)
+        ap4nu = AprimeNu(4,j1d)
+
+        if includeNu:
+            ap0mu = AprimeMu(0,j1d)
+            ap1mu = AprimeMu(1,j1d)
+            ap2mu = AprimeMu(2,j1d)
+            ap3mu = AprimeMu(3,j1d)
+            ap4mu = AprimeMu(4,j1d)
+
+            apmjmu = np.zeros((self.Nnuk+1, self.Nnuk+1, Neccs))
+            apmjmu[0,0,:] = 1 # for 0 derivatives, g(A) = 1
+            apmjmu[1,1,:] = 1 # for 1 derivative, g(A) = A
+
+            apmjmu[0,2,:] = ap1mu
+            apmjmu[2,2,:] = 1
+
+            apmjmu[0,3,:] = ap2mu 
+            apmjmu[1,3,:] = 3*ap1mu
+            apmjmu[3,3,:] = 1
+
+            apmjmu[0,4,:] = ap3mu + 3*(ap1mu)**2
+            apmjmu[1,4,:] = 4*ap2mu
+            apmjmu[2,4,:] = 6*ap1mu
+            apmjmu[4,4,:] = 1
+
+            apmjmu[0,5,:] = ap4mu + 10*ap1mu*ap2mu
+            apmjmu[1,5,:] = 5*ap3mu + 15*ap1mu**2
+            apmjmu[2,5,:] = 10*ap2mu
+            apmjmu[3,5,:] = 10*ap1mu
+            apmjmu[5,5,:] = 1
+
+        apmjnu = np.zeros((self.Nnuk+1, self.Nnuk+1, Neccs))
+        apmjnu[0,0,:] = 1 # for 0 derivatives, g(A) = 1
+        apmjnu[1,1,:] = 1 # for 1 derivative, g(A) = A
+
+        apmjnu[0,2,:] = ap1nu 
+        apmjnu[2,2,:] = 1
+
+        apmjnu[0,3,:] = ap2nu 
+        apmjnu[1,3,:] = 3*ap1nu
+        apmjnu[3,3,:] = 1
+
+        apmjnu[0,4,:] = ap3nu + 3*(ap1nu)**2
+        apmjnu[1,4,:] = 4*ap2nu
+        apmjnu[2,4,:] = 6*ap1nu
+        apmjnu[4,4,:] = 1
+
+        apmjnu[0,5,:] = ap4nu + 10*ap1nu*ap2nu
+        apmjnu[1,5,:] = 5*ap3nu + 15*ap1nu**2
+        apmjnu[2,5,:] = 10*ap2nu
+        apmjnu[3,5,:] = 10*ap1nu
+        apmjnu[5,5,:] = 1
+
+
+        kcl = self.kclusters[ii]
+
+        # set up some arrays that require a little bit of computation, then we'll expand them via indexing later
+        efac = (-de)**j1d / scipy.special.factorial(j1d) * scipy.special.gamma(self.nukclusters[ii]+1)/scipy.special.gamma(self.nukclusters[ii]+1-j1d)
+        nukfac = dnuk**m1d/scipy.special.factorial(m1d)
+        pfact = scipy.special.factorial(p1d)
+        ifact = scipy.special.factorial(i1d)
+        ipfact = (i2d<=p2d).astype(int) / np.clip(scipy.special.factorial(p2d-i2d), 1.0, None)
+        ippower = np.clip(p2d-i2d,0,None)
+        pmfac = (p2d_pm <= m2d_pm).astype(int)
+
+        # this is still kind of expensive because there are a lot of multiplications, i.e. we've expanding the matrix to an enormous size before multiplying (6d)
+        #to_sum = efac[eccs] * nukfac[ems] * apmjnu[peas,ems,eccs] * ( pfact[peas] / ifact[eyes] ) * ipfact[peas,eyes]  * pmfac[peas,ems] * ap0nu[eccs]**ippower[peas,eyes] * self.target_data[chis, ii, eccs, orders, eyes]
+
+
+        #to_sum = ( ipfact[peas,eyes] / ifact[eyes] ) *  ap0nu[eccs]**ippower[peas,eyes] * self.target_data[chis, ii, eccs, orders, eyes] 
+        to_sum =   apmjnu[peas5d, ems5d, eccs5d] * self.target_data[chis, ii, eccs, orders, peas] 
+
+        #to_sum_marg1 = np.sum(to_sum, axis=-1) # do the sum over i
+        #to_sum_marg2 = np.sum(to_sum_marg1 * pfact[peas5d] * apmjnu[peas5d,ems5d,eccs5d], axis=-1 ) # do the sum over p
+        to_sum_marg2 = np.sum(to_sum, axis=-1 ) # do the sum over p
+        to_sum_marg3 = np.sum(to_sum_marg2 * nukfac[ems4d], axis=-1) # sum over m
+        res = np.sum(to_sum_marg3 * efac[eccs3d], axis=1) # sum over j.
+
+
+        if includeNu:
+            efacmu = (-de)**j1d / scipy.special.factorial(j1d) * scipy.special.gamma(self.mukclusters[ii]+1)/scipy.special.gamma(self.mukclusters[ii]+1-j1d)
+            mukfac = dmuk**m1d/scipy.special.factorial(m1d)
+
+            to_sum =   apmjmu[peas5d, ems5d, eccs5d] * self.target_data_nuphase[chis, ii, eccs, orders, peas] 
+
+            #to_sum_marg1 = np.sum(to_sum, axis=-1) # do the sum over i
+            #to_sum_marg2 = np.sum(to_sum_marg1 * pfact[peas5d] * apmjnu[peas5d,ems5d,eccs5d], axis=-1 ) # do the sum over p
+            to_sum_marg2 = np.sum(to_sum, axis=-1 ) # do the sum over p
+            to_sum_marg3 = np.sum(to_sum_marg2 * mukfac[ems4d], axis=-1) # sum over m
+            res_nu = np.sum(to_sum_marg3 * efac[eccs3d], axis=1) # sum over j.
+
+
+
+            #to_sum_nuphase = efacmu[eccs] * mukfac[ems] * apmjmu[peas,ems,eccs] * scipy.special.factorial(peas)/np.clip(scipy.special.factorial(eyes)*scipy.special.factorial(peas-eyes),1.0,None) * (peas <= ems).astype(int) * (eyes <= peas).astype(int) * ap0mu[eccs]**np.clip(peas-eyes,0,None) * self.target_data_nuphase[chis, ii, eccs, orders, eyes]
+
+
+        
+        #res = np.sum(np.sum(np.sum(np.sum(to_sum, axis=-1), axis=-1), axis=-1), axis=1)
+        if includeNu:
+            pass
+            #res_nu = np.sum(np.sum(np.sum(np.sum(to_sum_nuphase, axis=-1), axis=-1), axis=-1), axis=1)
+        else:
+            res_nu = np.zeros(res.shape)
+        
+        return res, res_nu
+
+
+
+    def get_t_terms_interp(self, kIn, eIn, maxorder=None, includeNu=True, nchis=None, Necc=None, debug=False):
         # interpolate target data to the actual k<-->e.
         # note that this will be called (once) by each particle, so ideally it should be reasonably fast.
 
@@ -1865,8 +2077,9 @@ def benchmark():
 
     #lbpre = lbprecomputer.load( 'big_30_1000_alpha2p2_lbpre.pickle' )
     #lbpre = lbprecomputer.load('big_09_1000_0010_hernquistpotential_scale20000_mass868309528941p9471_alpha2p2_lbpre.pickle')
-    lbpre = lbprecomputer.load('big_06_0300_0010_hernquistpotential_scale20000_mass876185312020p125_alpha2p2_lbpre.pickle')
-    lbpre.generate_interpolators()
+    #lbpre = lbprecomputer.load('big_06_0300_0010_hernquistpotential_scale20000_mass876185312020p125_alpha2p2_lbpre.pickle')
+    lbpre = lbprecomputer.load('big_10_0300_0010_hernquistpotential_scale20000_mass852664632533p8286_alpha2p2_lbpre.pickle')
+    #lbpre.generate_interpolators()
     #lbpre.save()
 
     Npart = 12
@@ -1880,11 +2093,11 @@ def benchmark():
     colors = []
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
-    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int - $n_\chi=100$' )
-    simpleids.append('zintchi100')
-    colors.append('r')
+#    argslist.append( (psir, nu0, lbpre) ) 
+#    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
+#    ids.append( r'2 Int - $n_\chi=100$' )
+#    simpleids.append('zintchi100')
+#    colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'fourier', 'nchis':100, 'profile':True} )
@@ -1894,55 +2107,55 @@ def benchmark():
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':0, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int - $n_\chi=100$ - $N_\mathrm{time}=1$' )
+    ids.append( None )
     simpleids.append('zintchi100ot0')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':1, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int - $n_\chi=100$ - $N_\mathrm{time}=2$' )
+    ids.append( None )
     simpleids.append('zintchi100ot1')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':2, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int- $n_\chi=100$ - $N_\mathrm{time}=3$' )
+    ids.append( None )
     simpleids.append('zintchi100ot2')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':3, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int - $n_\chi=100$ - $N_\mathrm{time}=4$' )
+    ids.append( None )
     simpleids.append('zintchi100ot3')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':4, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int- $n_\chi=100$ - $N_\mathrm{time}=5$' )
+    ids.append( None )
     simpleids.append('zintchi100ot4')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':5, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int- $n_\chi=100$ - $N_\mathrm{time}=6$' )
+    ids.append( None )
     simpleids.append('zintchi100ot5')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':6, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int- $n_\chi=100$ - $N_\mathrm{time}=7$' )
+    ids.append( None )
     simpleids.append('zintchi100ot6')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':7, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'2 Int- $n_\chi=100$ - $N_\mathrm{time}=8$' )
+    ids.append( None )
     simpleids.append('zintchi100ot7')
     colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':8, 'zopt':'integrate', 'nchis':100} )
-    ids.append( r'Single Integration - $n_\chi=100$ - $N_\mathrm{time}=9$' )
+    ids.append( None )
     simpleids.append('zintchi100ot8')
     colors.append('r')
 
@@ -2385,6 +2598,9 @@ if __name__ == '__main__':
 #    lbpre = lbprecomputer.load('big_06_0300_0010_hernquistpotential_scale20000_mass876185312020p125_alpha2p2_lbpre.pickle')
 #    lbpre = add_orders(lbpre, 4)
 #    lbpre.save()
+
+    #lbpre = buildlbpre(timeorder=10, psir=hernquistpotential(20000, vcirc=219), vwidth=200, nchis=300, nks=10)
+    #lbpre.save()
 
     benchmark()
 
