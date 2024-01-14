@@ -1,15 +1,10 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import corner
 import pickle
-import time
 import copy
-import pdb
 import scipy.integrate
 import scipy.fft
 import scipy.spatial
 from scipy.spatial.transform import Rotation
-from tqdm import tqdm
 
 # Units throughout are Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
 G = 0.00449987  # pc^3 / (solar mass Myr^2)
@@ -229,8 +224,6 @@ class lbprecomputer:
                 inds = np.ones(len(trial_x) - 1)[switches]
                 a = trial_x[inds[0]]
                 b = trial_x[inds[0] + 1]
-            else:
-                pdb.set_trace()
 
         res = scipy.optimize.brentq(to_zero, a, b, xtol=1.0e-14)
         vCart = vCart0[:]
@@ -920,9 +913,6 @@ class particleLB:
         # thetadot = (x*vy - vx*y)/(R*R)
         w = vz
 
-        if profile:
-            tim = timer()
-
         # Treat vertical motions with epicyclic approximation (3 hydra heads meme lol)
         self.Ez = 0.5 * (w * w + (nunought * (R / self.rnought) ** (-alpha / 2.0)) ** 2 * z * z)
         # related quantity:
@@ -957,20 +947,16 @@ class particleLB:
                                               method='halley', rtol=1.0e-8, xtol=1.0e-10)
         res_apo = scipy.optimize.root_scalar(fpp, args=(self.epsilon, self.h), fprime=True, fprime2=True, x0=apo_zero,
                                              method='halley', rtol=1.0e-8, xtol=1.0e-10)
-
+        # TODO Throw error
         if res_peri.converged:
             self.peri = res_peri.root
-        else:
-            pdb.set_trace()
 
+
+        # TODO Throw error
         if res_apo.converged:
             self.apo = res_apo.root
-        else:
-            pdb.set_trace()
 
 
-        if profile:
-            tim.tick('Find peri apo')
 
         self.X = self.apo / self.peri
 
@@ -979,13 +965,12 @@ class particleLB:
             self.apo)  # centrifugal ratio at apocenter
         self.cRp = self.peri * self.peri * self.peri / (self.h * self.h) * self.psi.ddr(
             self.peri)  # centrifugal ratio at pericenter
+        # TODO Throw ERROR
+        #if not np.isfinite(self.cRa):
 
-        if not np.isfinite(self.cRa):
-            pdb.set_trace()
-        if not np.isfinite(self.X):
-            pdb.set_trace()
-        if not np.isfinite(self.cRp):
-            pdb.set_trace()
+        #if not np.isfinite(self.X):
+
+        #if not np.isfinite(self.cRp):
 
         self.k = np.log((-self.cRa - 1) / (self.cRp + 1)) / np.log(self.X)
 
@@ -1139,35 +1124,6 @@ class particleLB:
             else:
                 pdb.set_trace()
 
-        if profile:
-            tim.tick('set up t/chi interpolators')
-
-        if debug:
-            fig, ax = plt.subplots()
-            # plot the true wobble function and our approximations to it
-            chiArray = np.linspace(0, 2 * np.pi, 1000)
-            ui = np.array([self.ubar * (1.0 + self.e * np.cos(self.eta_given_chi(chi))) for chi in chiArray])
-            ax.plot(chiArray, np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0, c='k', lw=4, zorder=-10)
-            accum = self.e * self.e * np.sin(chiArray) ** 2 * 0.5 * self.wts[0]
-            accum2 = 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2]) * np.ones(len(chiArray))
-            ax.plot(chiArray, accum, c='r')
-            ax.plot(chiArray, accum2, c='b')
-            for i in np.arange(1, self.ordertime + 2):
-                accum = accum + self.e * self.e * np.sin(chiArray) * np.sin(chiArray) * self.wts_padded[i] * np.cos(
-                    i * chiArray)
-                ax.plot(chiArray, accum, c='r', alpha=i / (self.ordertime + 3), zorder=i)
-                prefac = -self.wts_padded[i - 2] + 2 * self.wts_padded[i] - self.wts_padded[i + 2]  # usual case
-                if i == 1:
-                    prefac = self.wts_padded[i] - self.wts_padded[
-                        i + 2]  # w[i-2] would give you w[-1] or something, but this term should just be zero.
-                accum2 = accum2 + 0.25 * self.e * self.e * prefac * np.cos(i * chiArray)
-                ax.plot(chiArray, accum2, c='b', alpha=i / (self.ordertime + 3), zorder=i + 1, ls='--')
-
-            ax.scatter(timezeroes, wtzeroes)
-            plt.savefig('testlb_wobble_' + str(self.ordertime).zfill(2) + '.png', dpi=300)
-            plt.close(fig)
-            if profile:
-                tim.tick('wobble plot')
 
         # pdb.set_trace()
 
@@ -1191,48 +1147,6 @@ class particleLB:
             self.Ws = self.Ws + wcorrs
 
         self.Wpadded = np.array(list(self.Ws) + [0, 0, 0, 0])
-        if profile:
-            tim.tick('evaluate Ws')
-
-        if debug:
-            fig, ax = plt.subplots()
-            etaArray = np.linspace(0, 2.0 * np.pi, 1000)
-            ui = self.ubar * (1.0 + self.e * np.cos(etaArray))
-            ax.plot(etaArray,
-                    np.sin(etaArray) ** 2 * (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0) * self.ubar * self.ubar / (
-                            (self.perU - ui) * (ui - self.apoU)), c='k', lw=4, zorder=-10)
-            # accum = 0.5*self.Ws[0]*np.ones(len(etaArray))
-            accum = 0.5 * self.Ws[0] * np.sin(etaArray) ** 2
-            ax.plot(etaArray, accum, c='r', lw=1, zorder=0)
-
-            accum2 = 0.25 * (self.Wpadded[0] * (1.0 - 2 * np.cos(2 * etaArray)) + self.Wpadded[1] * (
-                    -np.cos(3 * etaArray) + np.cos(etaArray)) + self.Wpadded[2] * (
-                                     -1.0 + 2 * np.cos(2 * etaArray) - -np.cos(4 * etaArray)))
-            ax.plot(etaArray, accum2, c='green', lw=1, zorder=0)
-
-            accum3 = 0.25 * (self.Wpadded[0] - self.Wpadded[2]) * np.ones(len(etaArray))
-
-            for i in np.arange(1, self.ordershape):
-                accum = accum + self.Wpadded[i] * np.cos(i * etaArray) * np.sin(etaArray) ** 2
-                ax.plot(etaArray, accum, c='r', lw=1, zorder=i)
-                if i > 2:
-                    accum2 = accum2 + 0.25 * self.Wpadded[i] * (
-                            2.0 * np.cos(i * etaArray) - (1.0 / (i + 2)) * np.cos((i + 2) * etaArray) - (
-                            1.0 / (i - 2.0)) * np.cos((i - 2) * etaArray))
-                    ax.plot(etaArray, accum2, c='green', lw=1, zorder=i + 1, ls='--')
-
-                prefac = -self.Wpadded[i - 2] + 2 * self.Wpadded[i] - self.Wpadded[i + 2]
-                if i == 1:
-                    prefac = self.Wpadded[i] - self.Wpadded[i + 2]
-
-                accum3 = accum3 + 0.25 * prefac * np.cos(i * etaArray)
-                ax.plot(etaArray, accum3, c='b', lw=1, zorder=i + 2, ls='-.')
-            ax.scatter(shapezeroes, Wzeroes * np.sin(shapezeroes) ** 2)
-            plt.savefig('testlb_wobbleshape_' + str(self.ordershape).zfill(2) + '.png', dpi=300)
-            plt.close(fig)
-
-            if profile:
-                tim.tick('another wobble plot')
 
         ustar = 2.0 / (self.peri ** self.k + self.apo ** self.k)
         self.half_esq_w0 = np.sqrt(self.essq(ustar) / self.ess(ustar)) - 1.0
@@ -1268,9 +1182,6 @@ class particleLB:
 
         # do some quick checks:
         condA = np.isclose(self.ubar * (1.0 + self.e * np.cos(self.etaIC)), R ** -self.k)
-
-        if not condA:
-            pdb.set_trace()
 
         assert condA
 
@@ -1310,13 +1221,9 @@ class particleLB:
             if profile:
                 tim.tick('initialize z')
 
+        #TODO Throw Error
+        #if np.isnan(self.tperiIC):
 
-        if np.isnan(self.tperiIC):
-            pdb.set_trace()
-
-        if profile:
-            tim.tick('Finish up')
-            tim.report()
 
     def getpart(self, t):
         return 0.0, self
@@ -1383,9 +1290,8 @@ class particleLB:
                 ang = dtheta - 2.0 * np.pi
             elif dtheta < -np.pi:
                 ang = dtheta + 2.0 * np.pi
-
-            if not np.isclose(np.abs(ang), thetarel):
-                pdb.set_trace()
+            #TODO Throw Error
+            #if not np.isclose(np.abs(ang), thetarel):
 
         resX = r * np.cos(ang) - np.sqrt(rrefsq)
         resY = r * np.sin(ang)
@@ -1843,37 +1749,13 @@ class particleLB:
         return r, phiabs, rdot, vphi
 
 
-class timer:
-    def __init__(self):
-        self.ticks = [time.time()]
-        self.labels = []
-
-    def tick(self, label):
-        self.ticks.append(time.time())
-        self.labels.append(label)
-
-    def timeto(self, label):
-        if label in self.labels:
-            i = self.labels.index(label)
-            return self.ticks[i + 1] - self.ticks[i]
-        else:
-            return np.nan
-
-    def report(self):
-        arr = np.array(self.ticks)
-        deltas = arr[1:] - arr[:-1]
-        print("Timing report:")
-        for i in range(len(self.labels)):
-            print(self.labels[i], deltas[i], 100 * deltas[i] / np.sum(deltas), r'%')
-
-
 def precompute_inverses_up_to(lbpre, maxshapeorder, hardreset=False):
     if not hasattr(lbpre, 'shapezeros') or hardreset:
         lbpre.shapezeros = {}
     if not hasattr(lbpre, 'Warrs') or hardreset:
         lbpre.Warrs = {}
 
-    for shapeorder in tqdm(range(maxshapeorder + 1, -1, -1)):
+    for shapeorder in range(maxshapeorder + 1, -1, -1):
         W_inv_arr, shapezeroes = lbpre.invert(shapeorder)
         lbpre.Warrs[shapeorder] = W_inv_arr
         lbpre.shapezeros[shapeorder] = shapezeroes
@@ -1898,57 +1780,6 @@ def coszeros(ordN):
     for i in range(ordN):
         theZeros[i] = (np.pi / 2.0 + i * np.pi) / ordN
     return theZeros
-
-
-def survey_lb():
-    ## quickly get a sense of what values of e and k need to be tabulated.
-    xCart0 = np.array([8100.0, 1.0, 0.0])
-    vcirc = 220.0
-    vCart0 = np.array([1.0, vcirc, 0.0])
-
-    nu = np.sqrt(4.0 * np.pi * G * 1.0)
-
-    ordertime = 10
-    ordershape = 10
-
-    nsamp = 10000
-    results = np.zeros((nsamp, 3))
-    # xArr = np.random.randn( nsamp, 3 ) * 1000
-    # vArr = np.random.randn( nsamp, 3 ) * 40
-    for i in range(10000):
-        vCart = vCart0  # + vArr[i,:]
-        rf = np.random.random()
-        vCart[1] = rf * 300 + 1.0
-        vCart[2] = 0  # for now
-
-        xCart = xCart0  # + xArr[i,:]
-        xCart[2] = 0  # for now
-
-        vc = 220 + np.random.randn() * 10
-
-        def psir(r):
-            return - vc * vc * np.log(r)
-
-        if not vCart[0] ** 2 + vCart[1] ** 2 + vCart[2] ** 2 > 0:
-            pdb.set_trace()
-        part = particleLB(xCart, vCart, psir, nu, ordershape=ordershape, ordertime=ordertime)
-
-        results[i, 0] = part.k
-        results[i, 1] = part.e
-        results[i, 2] = part.X
-
-        if np.any(np.isnan(results[i, :])):
-            pdb.set_trace()
-
-    fig = corner.corner(results, labels=['k', 'e', 'X'])
-    plt.savefig('testlb_ke_range.png', dpi=300)
-    plt.close(fig)
-
-    fig, ax = plt.subplots()
-    ax.scatter(results[:, 0], results[:, 1], c='k', lw=0, s=2, alpha=0.1)
-    ax.set_yscale('log')
-    plt.savefig('testlb_ke_scatter.png', dpi=300)
-    plt.close(fig)
 
 
 def rms(arr):
@@ -2624,6 +2455,7 @@ def dist_to_nearest_k(lbpre, k):
     i = np.argmin( np.abs(lbpre.ks - k) )
     return np.abs(lbpre.ks[i] - k)
 
+
 def getPolarFromCartesianXV(xv):
     x = xv[0, :]
     y = xv[1, :]
@@ -2676,7 +2508,7 @@ class perturbedParticle:
 
     def exists(self, t):
         # check whether the particle has been produced yet
-        return t > self.ts[0]
+        return t >= self.ts[0]
 
     def getpart(self, t):
         i = np.searchsorted(self.ts, t, side='left')
@@ -2689,21 +2521,10 @@ class perturbedParticle:
         else:
             assert False
 
-
-
-
-if __name__ == '__main__':
-    #lbpre = buildlbpre(timeorder=9, psir=hernquistpotential(20000, vcirc=221), vwidth=200, filename='big_09_1000_0010_hernquistpotential_scale20000_mass868309528941p9471_alpha2p2_lbpre.pickle')
-#    lbpre = buildlbpre(timeorder=6, psir=hernquistpotential(20000, vcirc=222), vwidth=200, nchis=300)
-#    lbpre.save()
-#    lbpre = buildlbpre(timeorder=6, psir=hernquistpotential(20000, vcirc=222), vwidth=200, nchis=300, filename='big_06_0300_0010_hernquistpotential_scale20000_mass876185312020p125_alpha2p2_lbpre.pickle')
-#    lbpre.save()
-#    lbpre = lbprecomputer.load('big_06_0300_0010_hernquistpotential_scale20000_mass876185312020p125_alpha2p2_lbpre.pickle')
-#    lbpre = add_orders(lbpre, 4)
-#    lbpre.save()
-
-    #lbpre = buildlbpre(timeorder=10, psir=hernquistpotential(20000, vcirc=219), vwidth=200, nchis=300, nks=10)
-    #lbpre.save()
-
-    benchmark()
+    def xvabs(self, t):
+        if self.exists(t):
+            tref, part = self.getpart(t)
+            return part.xvabs(t - tref)
+        else:
+            assert False
 
