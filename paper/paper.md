@@ -2,9 +2,10 @@
 title: 'lbparticles: Semi-analytic particle model Python Package'
 tags:
   - Python
-  - Astronomy
-  - Interstellar Objects
-  - Particle Orbit Model
+  - astronomy
+  - interstellar objects
+  - particle orbit model
+  - galactic dynamics
 authors:
   - name: John C. Forbes
     orcid: 0000-0002-1975-4449
@@ -28,7 +29,7 @@ bibliography: paper.bib
 
 # Summary
 
-The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in a central potential at a galaxy scale. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to approximate analytical equations. The package is built upon Lynden-Bell's previous work [@LyndenBound2015:2015]
+The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in a central potential at a galaxy scale. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to approximate analytical equations. The package is built upon Lynden-Bell's previous work [@Lynden:2015]
 
 The lbparticles package allows for the investigation into population dynamics of interstellar objects. 
 
@@ -48,9 +49,9 @@ The lbparticles is designed for interstellar object research...
 
 How do the classes of the lbparticles operate?
 
-## Precomputer
+## precomputer
 
-## Particle
+## particle
 
 ## logPotential
 
