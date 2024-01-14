@@ -335,7 +335,7 @@ class lbprecomputer:
 
         dnuk = nuk - self.nukclusters[ii]
         
-        self.mukclusters = self.nukclusters - self.alpha/(2.0*self.kclusters)
+        #self.mukclusters = self.nukclusters - self.alpha/(2.0*self.kclusters)
         
         dmuk = muk - self.mukclusters[ii]
         de = eIn - self.eclusters[ii]
@@ -681,6 +681,55 @@ def dbg_ek(lbpre, kIn, eIn):
 
 
 
+class potential_container:
+    def __init__(potential, nur=None, dlnnur=None):
+        self.potential = potential
+        self.nur = nur # nu(r), the vertical oscillation frequency as fn of r
+        self.dlnnur = dlnnur
+        if self.nur is None:
+            pass
+        else:
+            self.initialize_deltapsi()
+            assert not self.dlnnur is None
+
+    def initialize_deltapsi(self):
+        def to_integrate( r, dummy ):
+            return 1.0/(r*r*self.nu(r)) * (r* self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+        t_eval = np.logspace(-5, np.log10(300)*0.99999, 1000 )
+        logr_eval = np.linspace(-5, np.log10(300)*0.99999, 1000)
+        res = scipy.integrate.solve_ivp(to_integrate, [1.0e-5, 300], [0], method='DOP853', rtol=1.0e-13, atol=1.0e-13, t_eval=t_eval)
+
+        self.deltapsi_of_logr_fac = scipy.interpolate.CubicSpline( logr_eval,  res.y.flatten() )
+
+    def Omega(self, r, Iz0=0): 
+        return self.vc(r,Iz0=Iz0)/r
+
+    def kappa(self,r, Iz=0):
+        return self.Omega(r,Iz0=Iz0)*self.gamma(r)
+
+    def ddr(self, r, Iz0=0):
+        return self.potential.ddr(r) + Iz0 /(r*r*self.nu(r)) * (r* self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)) 
+    def ddr2(self, r, Iz0=0):
+        return self.potential.ddr2(r) + Iz0/(r*r*self.nu(r)) * ( (-2.0/r - self.dlnnudr(r)) * (r*self.potential.ddr2(r) - 0.5*self.potential.ddr(r)) + (r*self.potential.ddr3(r) + 0.5*self.potential.ddr2(r) ) )
+    def __call__(self, r, Iz0=0):
+        return self.potential(r) + Iz0* self.deltapsi_of_logr_fac(np.log10(r))
+    def vc(self, r, Iz0=0):
+        return np.sqrt( r* self.ddr(r, Iz0) )
+    def gamma(self, r, Iz0=0):
+        # beta = dlnv/dlnr
+        # beta = (r/v) dv/dr = (r/v) d/dr ( r dpsi/dr ) = (r/v) ( dpsi/dr + r d^2psi/dr^2 )
+        beta = (r/self.vc(r,Iz0=Iz0)) * (self.ddr(r,Iz0=Iz0) + r*self.ddr2(r,Iz0=Iz0))
+        return np.sqrt(2*(beta+1))
+    def nu(self, r, Iz0=0):
+        return np.sqrt( self.nur(r)**2 -  Iz0 /(r*r*r*self.nu(r)) * (r* self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))  )
+
+class nfwpotential:
+    def __init__(self, scale, mass):
+        self.scale = scale
+        self.mass = mass
+    
+    # GM/r^2 = v^2/r = dpsi/dr
+
 
 class hernquistpotential:
     def __init__(self, scale, mass=None, vcirc=None):
@@ -728,14 +777,14 @@ class hernquistpotential:
         '''A unique name for the object'''
         return 'hernquistpotential_scale'+str(self.scale).replace('.','p')+'_mass'+str(self.mass).replace('.','p')
 
+class powerlawpotential:
+    def __init__(self):
+        pass
+
+
 class logpotential:
     def __init__(self, vcirc, nur=None):
         self.vcirc = vcirc
-
-        self.nur = nur
-        if not nur is None:
-            pass
-
 
     def __call__(self, r):
         return -self.vcirc ** 2 * np.log(r)
@@ -760,9 +809,6 @@ class logpotential:
 
     def ddr3(self, r):
         return -2.0 * self.vcirc ** 2 / (r * r * r)
-
-    def deltanusq(self, r, IZ=0):
-        pass
 
     def name(self):
         '''A unique name for the object'''
@@ -1732,7 +1778,10 @@ class particleLB:
         # hang on if you have this then you don't need to do anything numeric.
         eta_ret = None
         ret = np.where( sinchi>0, eta_from_arccos, 2*np.pi - eta_from_arccos )
-        return ret
+
+        nrot = (chi - (chi % (2.0 * np.pi))) / (2.0 * np.pi)
+
+        return ret + 2.0*np.pi*nrot
 
         # defunct, replaced by vectorized version above
 #        if sinchi > 0:
@@ -2093,11 +2142,11 @@ def benchmark():
     colors = []
 
 
-#    argslist.append( (psir, nu0, lbpre) ) 
-#    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
-#    ids.append( r'2 Int - $n_\chi=100$' )
-#    simpleids.append('zintchi100')
-#    colors.append('r')
+    argslist.append( (psir, nu0, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
+    ids.append( r'$2\ \mathrm{Int }- n_\chi=100$' )
+    simpleids.append('zintchi100')
+    colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'fourier', 'nchis':100, 'profile':True} )
@@ -2135,11 +2184,11 @@ def benchmark():
     simpleids.append('zintchi100ot4')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
-    kwargslist.append( {'ordershape':ordershape, 'ordertime':5, 'zopt':'integrate', 'nchis':100} )
-    ids.append( None )
-    simpleids.append('zintchi100ot5')
-    colors.append('r')
+#    argslist.append( (psir, nu0, lbpre) ) 
+#    kwargslist.append( {'ordershape':ordershape, 'ordertime':5, 'zopt':'integrate', 'nchis':100} )
+#    ids.append( r'$2 Int - n_\chi=100$' )
+#    simpleids.append('zintchi100ot5')
+#    colors.append('r')
 
     argslist.append( (psir, nu0, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':6, 'zopt':'integrate', 'nchis':100} )
@@ -2158,6 +2207,16 @@ def benchmark():
     ids.append( None )
     simpleids.append('zintchi100ot8')
     colors.append('r')
+
+
+    for ii in range(30):
+
+        argslist.append( (psir, nu0, lbpre) ) 
+        kwargslist.append( {'ordershape':ii, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
+        ids.append( None )
+        simpleids.append('zintchi100os'+str(ii).zfill(2))
+        colors.append('b')
+
 
 #    argslist.append( (psir, nu0, lbpre) ) 
 #    kwargslist.append( {'ordershape':ordershape, 'ordertime':-5, 'zopt':'fourier', 'nchis':100} )
@@ -2288,7 +2347,7 @@ def benchmark():
                 results[j,ii].estimate_errors([9000,10000],'lastgyr', psir=psir,nu0=nu0)
                 results[j,ii].estimate_errors([200,300],'200myr')
                 results[j,ii].estimate_errors([900,1000],'1gyr', psir=psir,nu0=nu0)
-                results[j,ii].errs_at_fixed_time(0.02, 'fixedtime', rtol=0.2)
+                results[j,ii].errs_at_fixed_time(0.025, 'fixedtime', rtol=0.2)
 
 
     alpha = 0.9
@@ -2301,7 +2360,7 @@ def benchmark():
             ax.scatter( [results[j,ii].runtimes['1gyr'] for ii in range(Npart)], [results[j,ii].rerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='silver' )
         else:
             if 'ordertime' in kwargslist[j].keys():
-                if kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0 :
+                if (kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0) and results[j,ii].part.ordershape==ordershape :
                     ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=1, alpha=alpha,edgecolors='k', s=siz )
                     ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].rerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='P', lw=1, alpha=alpha, edgecolors='k', s=siz )
                     ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].rerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='k', s=siz )
@@ -2478,11 +2537,11 @@ def benchmark():
 
 
 
-    fig,ax = plt.subplots(figsize=(12,12))
+    fig,ax = plt.subplots(figsize=(8,8))
     for j in range(len(argslist)):
         if results[j,0].isparticle():
             if 'ordertime' in kwargslist[j].keys():
-                if results[j,ii].part.zopt == 'integrate':
+                if results[j,ii].part.zopt == 'integrate' and results[j,ii].part.ordershape==ordershape:
                     des = np.array([lbpre.e_of_k(results[j,ii].part.k) - results[j,ii].part.e for ii in range(Npart)] )
                     sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
                     dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
@@ -2495,24 +2554,68 @@ def benchmark():
                         marker='s'
                     else:
                         marker='o'
-                    ax.scatter( [kwargslist[j]['ordertime']]*Npart, [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha, edgecolors='k', s=sizes)
+                    ax.scatter( np.array([kwargslist[j]['ordertime']]*Npart)+np.random.randn(Npart)*0.05, [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha, edgecolors='k', s=sizes)
+                    #print("Making benchmark_order - ", kwargslist[j], colors[j], simpleids[j] )
         else:
             pass
-    ax.set_xlabel(r'Ordertime')
+    ax.set_xlabel(r'Time Order')
     ax.set_ylabel('RMS Error in r (pc)')
     ax.set_yscale('log')
     #ax.set_xscale('log')
     ax.legend()
 
     ax3 = ax.twinx()
-    ax3.scatter([0],[0], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
-    ax3.scatter([0],[0], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
-    ax3.scatter([0],[0], c='k', marker='s', edgecolors='k', label=r'$n_\chi=1000$')
-    ax3.scatter([0],[0], c='k', marker='o', edgecolors='k', label=r'Other')
+    ax3.scatter([-100],[-100], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
+    ax3.scatter([-100],[-100], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
+    ax3.scatter([-100],[-100], c='k', marker='s', edgecolors='k', label=r'$n_\chi=300$')
+    ax3.scatter([-100],[-100], c='k', marker='o', edgecolors='k', label=r'Other')
     ax3.get_yaxis().set_visible(False)
-    ax3.legend(loc=(0.03,0.9))
+    ax3.legend(loc=(0.03,0.04))
+
+    ax.set_xlim(-0.3, 8.3)
 
     fig.savefig('benchmark_order.png')
+    plt.close(fig)
+
+    
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            if 'ordershape' in kwargslist[j].keys():
+                if results[j,ii].part.zopt == 'integrate' and results[j,ii].part.ordertime==ordertime:
+                    des = np.array([lbpre.e_of_k(results[j,ii].part.k) - results[j,ii].part.e for ii in range(Npart)] )
+                    sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
+                    dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
+                    #sizes = 90+np.log10(sizes)*10
+                    if results[j,0].part.nchis == 20:
+                        marker='P'
+                    elif results[j,0].part.nchis == 100:
+                        marker='D'
+                    elif results[j,0].part.nchis == 300:
+                        marker='s'
+                    else:
+                        marker='o'
+                    ax.scatter( np.array([kwargslist[j]['ordershape']]*Npart)+np.random.randn(Npart)*0.05, [results[j,ii].phierrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha, edgecolors='k', s=sizes)
+                    #print("Making benchmark_order - ", kwargslist[j], colors[j], simpleids[j] )
+        else:
+            pass
+    ax.set_xlabel(r'Shape Order')
+    ax.set_ylabel('RMS Error in $r\phi$ (pc)')
+    ax.set_yscale('log')
+    #ax.set_xscale('log')
+    ax.legend()
+
+    ax3 = ax.twinx()
+    ax3.scatter([-100],[-100], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
+    ax3.scatter([-100],[-100], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
+    ax3.scatter([-100],[-100], c='k', marker='s', edgecolors='k', label=r'$n_\chi=300$')
+    ax3.scatter([-100],[-100], c='k', marker='o', edgecolors='k', label=r'Other')
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.03,0.04))
+
+    ax.set_xlim(-0.3, 30.3)
+
+    fig.savefig('benchmark_ordershape.png')
     plt.close(fig)
 
 
