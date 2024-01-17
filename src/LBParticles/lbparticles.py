@@ -296,7 +296,6 @@ class zoptEnum(Enum):
     ZERO = 4
 
 
-
 @dataclass(frozen=True)
 class particle2:
     ordershape: int
@@ -361,7 +360,7 @@ class particle2:
                  adhoc=None,
                  nchis=1000,Nevalz=1000,
                  atolz=1.0e-7,rtolz=1.0e-7,
-                 zopt=zoptEnum('INTEGRATE')):
+                 zopt=zoptEnum['INTEGRATE']):
         self.nu0 = nu0
         self.alpha = alpha if lbdata is None else lbdata.alpha
         self.r0 = r0
@@ -456,10 +455,10 @@ class particle2:
         chi_eval = lbdata.get_chi_arr(nchis)
         timezeroes = coszeros(self.ordertime)
         wt_arr = np.zeros((self.ordertime, self.ordertime))
-        wtzeroes = np.zeros(self.ordertime)  # the values of w[chi] at the zeroes of cos((n+1)chi)
+        wtzeroes = np.zeros(self.ordertime)
         nuk = 2.0 / self.k - 1.0
         for i in range(self.ordertime):
-            coeffs = np.zeros(self.ordertime)  # coefficient for w0, w1, ... for this zero
+            coeffs = np.zeros(self.ordertime)
             coeffs[0] = 0.5
             for j in np.arange(1, len(coeffs)):
                 coeffs[j] = np.cos(j * timezeroes[i])
@@ -469,7 +468,6 @@ class particle2:
             ui2 = 1.0 / (0.5 * (1.0 / self.perU + 1.0 / self.apoU) * (1.0 - self.e * np.cos(timezeroes[i])))
             assert np.isclose(ui, ui2)
             wtzeroes[i] = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
-            # pdb.set_trace()
 
 
         wt_inv_arr = np.linalg.inv(wt_arr)
@@ -483,10 +481,7 @@ class particle2:
             self.wts = self.wts + wtwcorrs
 
         self.wts_padded = list(self.wts) + list([0, 0, 0, 0])
-        # now that we know the coefficients we can put together t(chi) and then chi(t).
-        # tee needs to be multiplied by l^2/(h*m0*(1-e^2)^(nu+1/2)) before it's in units of time.
-
-        t_terms, nu_terms = lbpre.get_t_terms(self.e, maxorder=self.ordertime+2, includeNu=(zopt=='first' or zopt=='zero'), nchis=nchis )
+        t_terms, nu_terms = lbdata.get_t_terms(self.e, maxorder=self.ordertime+2, includeNu=(zopt=='first' or zopt=='zero'), nchis=nchis )
 
 
         tee = (1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])) * t_terms[0]
@@ -494,10 +489,9 @@ class particle2:
 
         if self.ordertime > 0:
             for i in np.arange(1, self.ordertime + 2):
-                prefac = -self.wts_padded[i - 2] + 2 * self.wts_padded[i] - self.wts_padded[i + 2]  # usual case
+                prefac = -self.wts_padded[i - 2] + 2 * self.wts_padded[i] - self.wts_padded[i + 2]
                 if i == 1:
-                    prefac = self.wts_padded[i] - self.wts_padded[
-                        i + 2]  # w[i-2] would give you w[-1] or something, but this term should just be zero.
+                    prefac = self.wts_padded[i] - self.wts_padded[i + 2]
                 prefac = prefac * 0.25 * self.e * self.e
                 tee = tee + prefac * t_terms[i]
                 nuu = nuu + prefac * nu_terms[i]
@@ -565,17 +559,6 @@ class particle2:
         self.nu_t_0 = np.arctan2(-w, z * self.nu(0)) - self.zphase_given_tperi(self.tperiIC)
         if zopt=='integrate':
             self.initialize_z(rtol=rtolz, atol=atolz, Neval=Nevalz)
-
-
-
-
-
-
-
-
-
-
-
 
 class particle:
     # use orbits from Lynden-Bell 2015.
