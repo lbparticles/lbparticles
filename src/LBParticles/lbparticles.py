@@ -291,9 +291,10 @@ class precomputer:
 
 class zoptEnum(Enum):
     INTEGRATE = 1
-    TILT = 2
-    FIRST = 3
-    ZERO = 4
+    FOURIER = 2
+    TILT = 3
+    FIRST = 4
+    ZERO = 5
 
 
 @dataclass(frozen=True)
