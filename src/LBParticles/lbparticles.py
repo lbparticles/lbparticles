@@ -1,4 +1,6 @@
 import numpy as np
+from dataclasses import dataclass
+from enum import Enum
 import pickle
 import copy
 import scipy.integrate
@@ -257,6 +259,66 @@ class precomputer:
                     ret_nu[i,k] = self.interpolators_nuphase[i,keval](e)
         
         return ret, ret_nu
+
+class zoptEnum(Enum):
+    INTEGRATE = 1
+    TILT = 2
+    FIRST = 3
+    ZERO = 4
+
+
+
+@dataclass(frozen=True)
+class particleData:
+    ordershape: int
+    ordertime: int
+    nu0: float
+    alpha: float
+    r0: float
+    psi: float
+    x0: float
+    v0: float
+    hvec: float
+    hhat: float
+    zopt: zoptEnum
+    rot: Rotation
+    Ez: float
+    h: float
+    epislon: float
+    peri: float
+    perU: float
+    apo: float
+    apoU: float
+    X: float
+    cRa: float
+    k: float
+    e: float
+    m0sq: float
+    ubar: float
+    Ubar: float
+    vt0: float
+    IzIC: float
+    psiIC: float
+    chiIC: float
+    etaIC: float
+    phiIC: float
+    thetaIC: float
+    Tr: float
+    phaseTr: float
+    Ws: float
+    wpadded: float
+    half_esq_w0: float
+    t_of_chi: float
+    chi_of_t: float
+    vt_of_chi: float
+    vt_of_t: float
+    cosine_integral: float
+    sine_integral: float
+    sine_integral_of_chi: float
+    cosine_integral_of_chi: float
+
+
+
 
 class particle:
     # use orbits from Lynden-Bell 2015.
