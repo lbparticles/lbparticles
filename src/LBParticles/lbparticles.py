@@ -13,6 +13,35 @@ G = 0.00449987  # pc^3 / (solar mass Myr^2)
 
 # TODO -- Write Exception errors for all the different types of errors that you can encounter while using the package
 
+
+class Potential:
+    def __init__(self, vcirc):
+        self.vcirc = vcirc
+
+    def __call__(self, r):
+        return -self.vcirc ** 2 * np.log(r)
+
+    def Omega(self, r):
+        return self.vcirc / r
+
+    def gamma(self, r):
+        # TODO - I don't understand how this is hardcoded?
+        return np.sqrt(2.0)
+
+    def kappa(self, r):
+        res = self.Omega(r)
+        return res * res
+
+    def vc(self, r):
+        return self.vcirc
+
+    def ddr(self, r):
+        return -self.vcirc ** 2 / r
+
+    def ddr2(self, r):
+        return self.vcirc ** 2 / (r * r)
+
+
 class precomputer:
     def __init__(self, timeorder, shapeorder, psir, etarget, nchis, nks, alpha, vwidth=50):
         # enumerate possible k-e combinations.
@@ -269,16 +298,16 @@ class zoptEnum(Enum):
 
 
 @dataclass(frozen=True)
-class particleData:
+class particle2:
     ordershape: int
     ordertime: int
     nu0: float
     alpha: float
     r0: float
-    psi: float
+    psi: Potential
     x0: float
     v0: float
-    hvec: float
+    hvec: np.ndarray
     hhat: float
     zopt: zoptEnum
     rot: Rotation
@@ -292,7 +321,7 @@ class particleData:
     X: float
     cRa: float
     k: float
-    e: float
+    ell: float
     m0sq: float
     ubar: float
     Ubar: float
@@ -316,6 +345,234 @@ class particleData:
     sine_integral: float
     sine_integral_of_chi: float
     cosine_integral_of_chi: float
+
+    def __init__(self,
+                 xCartIn,vCartIn,
+                 psir,nu0,
+                 lbdata: precomputer,
+                 r0=8100.0,
+                 ordershape=1,ordertime=1,
+                 tcorr=True,emcorr=1.0,Vcorr=1.0,wcorrs=None,wtwcorrs=None,
+                 debug=False,
+                 quickreturn=False,
+                 profile=False,
+                 tilt=False,
+                 alpha=2.2,
+                 adhoc=None,
+                 nchis=1000,Nevalz=1000,
+                 atolz=1.0e-7,rtolz=1.0e-7,
+                 zopt=zoptEnum('INTEGRATE')):
+        self.nu0 = nu0
+        self.alpha = alpha if lbdata is None else lbdata.alpha
+        self.r0 = r0
+        self.psi = psir
+        self.ordershape = ordershape
+        self.ordertime = ordertime
+        self.x0 = copy.deepcopy(xCartIn)
+        self.v0 = copy.deepcopy(vCartIn)
+        self.hvec = np.cross(xCartIn,vCartIn)
+        self.hhat = self.hvec / np.sqrt(np.sum(self.hvec * self.hvec))
+        v = np.cross(np.array([0, 0, 1.0]), self.hhat)
+        sine = np.sqrt(np.sum(v * v))  # wait you don't actually use this lol
+        cose = np.dot(self.hhat, np.array([0, 0, 1.0]))
+
+        vcross = np.zeros((3, 3))
+        vcross[0, 1] = -v[2]
+        vcross[1, 0] = v[2]
+        vcross[0, 2] = v[1]
+        vcross[2, 0] = -v[1]
+        vcross[1, 2] = -v[0]
+        vcross[2, 1] = v[0]
+        self.zopt = zopt
+        if zopt=='TILT':
+            rot = np.eye(3) + vcross + vcross @ vcross * 1.0 / (1.0 + cose)
+        else:
+            rot = np.eye(3)
+
+        self.rot = Rotation.from_matrix(rot)
+
+        xCart = self.rot.apply(xCartIn, inverse=True)
+        vCart = self.rot.apply(vCartIn, inverse=True)
+
+        x, y, z = xCart
+        vx, vy, vz = vCart
+
+        if tilt:
+            assert np.isclose(z, 0)
+            assert np.isclose(vz, 0)
+
+        R = np.sqrt(x * x + y * y)
+        theta = np.arctan2(y, x)
+
+        u = (x * vx + y * vy) / R
+        v = ((x * vy - vx * y) / R)
+        w = vz
+
+        self.Ez = 0.5 * (w * w + (nu0 * (R / self.r0) ** (-alpha / 2.0)) ** 2 * z * z)
+        self.IzIC = self.Ez / (nu0 * (R / self.r0) ** -(alpha / 2.0))
+        self.psiIC = np.arctan2(z * (nu0 * (R / self.r0) ** -(alpha / 2.0)), w)
+
+
+        self.h = R * v
+        self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(
+            R)
+        def fpp(r, epsi, hi):
+            return 2.0 * epsi + 2.0 * self.psi(r) - hi * hi / (r * r), 2.0 * (
+                    self.psi.ddr(r) + hi * hi / (r * r * r)), 2.0 * (self.psi.ddr2(r) - hi * hi / (r * r * r * r))
+        rcirc = self.h / self.psi.vc(R)
+        eff, effprime, effpp = fpp(rcirc, self.epsilon, self.h)
+        curvature = -0.5 * effpp
+        peri_zero = np.min([rcirc / 2.0, R])
+        apo_zero = np.max([rcirc * 2.0, R])
+        res_peri = scipy.optimize.root_scalar(fpp, args=(self.epsilon, self.h), fprime=True, fprime2=True, x0=peri_zero,
+                                              method='halley', rtol=1.0e-8, xtol=1.0e-10)
+        res_apo = scipy.optimize.root_scalar(fpp, args=(self.epsilon, self.h), fprime=True, fprime2=True, x0=apo_zero,
+                                             method='halley', rtol=1.0e-8, xtol=1.0e-10)
+        self.peri = res_peri.root
+        self.apo = res_apo.root
+        
+        self.X = self.apo / self.peri
+
+        dr = 0.00001
+        self.cRa = self.apo * self.apo * self.apo / (self.h * self.h) * self.psi.ddr(
+            self.apo)
+        self.cRp = self.peri * self.peri * self.peri / (self.h * self.h) * self.psi.ddr(
+            self.peri) 
+        self.k = np.log((-self.cRa - 1) / (self.cRp + 1)) / np.log(self.X)
+
+        self.m0sq = 2 * self.k * (1.0 + self.cRp) / (1.0 - self.X ** -self.k) / (emcorr ** 2)
+        self.m0 = np.sqrt(self.m0sq)
+
+        self.perU = self.peri ** -self.k
+        self.apoU = self.apo ** -self.k
+
+        self.e = (self.perU - self.apoU) / (self.perU + self.apoU)
+        if quickreturn:
+            return
+        self.ubar = 0.5 * (self.perU + self.apoU)
+        self.Ubar = 0.5 * (1.0 / self.perU + 1.0 / self.apoU)
+
+        self.ell = self.ubar ** (-1.0 / self.k)
+        chi_eval = lbdata.get_chi_arr(nchis)
+        timezeroes = coszeros(self.ordertime)
+        wt_arr = np.zeros((self.ordertime, self.ordertime))
+        wtzeroes = np.zeros(self.ordertime)  # the values of w[chi] at the zeroes of cos((n+1)chi)
+        nuk = 2.0 / self.k - 1.0
+        for i in range(self.ordertime):
+            coeffs = np.zeros(self.ordertime)  # coefficient for w0, w1, ... for this zero
+            coeffs[0] = 0.5
+            for j in np.arange(1, len(coeffs)):
+                coeffs[j] = np.cos(j * timezeroes[i])
+            wt_arr[i, :] = coeffs[:] * (self.e * self.e * np.sin(timezeroes[i]) ** 2)
+
+            ui = self.ubar * (1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i])))
+            ui2 = 1.0 / (0.5 * (1.0 / self.perU + 1.0 / self.apoU) * (1.0 - self.e * np.cos(timezeroes[i])))
+            assert np.isclose(ui, ui2)
+            wtzeroes[i] = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
+            # pdb.set_trace()
+
+
+        wt_inv_arr = np.linalg.inv(wt_arr)
+
+        self.wts = np.dot(wt_inv_arr, wtzeroes)
+
+
+        if wtwcorrs is None:
+            pass
+        else:
+            self.wts = self.wts + wtwcorrs
+
+        self.wts_padded = list(self.wts) + list([0, 0, 0, 0])
+        # now that we know the coefficients we can put together t(chi) and then chi(t).
+        # tee needs to be multiplied by l^2/(h*m0*(1-e^2)^(nu+1/2)) before it's in units of time.
+
+        t_terms, nu_terms = lbpre.get_t_terms(self.e, maxorder=self.ordertime+2, includeNu=(zopt=='first' or zopt=='zero'), nchis=nchis )
+
+
+        tee = (1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])) * t_terms[0]
+        nuu = (1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])) * nu_terms[0]
+
+        if self.ordertime > 0:
+            for i in np.arange(1, self.ordertime + 2):
+                prefac = -self.wts_padded[i - 2] + 2 * self.wts_padded[i] - self.wts_padded[i + 2]  # usual case
+                if i == 1:
+                    prefac = self.wts_padded[i] - self.wts_padded[
+                        i + 2]  # w[i-2] would give you w[-1] or something, but this term should just be zero.
+                prefac = prefac * 0.25 * self.e * self.e
+                tee = tee + prefac * t_terms[i]
+                nuu = nuu + prefac * nu_terms[i]
+
+        tfac = self.ell * self.ell / (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5)) / tcorr
+        mytfac = self.Ubar ** nuk / (self.h * self.m0 * self.ubar * np.sqrt(1 - self.e * self.e))
+        nufac = nu0 * tfac * self.Ubar ** (-self.alpha / (2.0 * self.k)) / self.rnought ** (-self.alpha / 2.0)
+        tee = tee.flatten()
+        nuu = nuu.flatten()
+        if zopt=='first':
+            dchi = chi_eval[1] - chi_eval[0]
+            integrands = np.sin(chi_eval) / (1.0 - self.e * np.cos(chi_eval)) * np.cos(2.0 * nuu * nufac)
+            to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
+            lefts = integrands[:-1]
+            rights = integrands[1:]
+            self.cosine_integral = np.zeros(len(chi_eval))
+            self.cosine_integral[1:] = np.cumsum(
+                [to_integrate.integrate(chi_eval[k], chi_eval[k + 1]) for k in range(len(chi_eval) - 1)])
+
+            integrands = np.sin(chi_eval) / (1.0 - self.e * np.cos(chi_eval)) * np.sin(2.0 * nuu * nufac)
+            to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
+            self.sine_integral = np.zeros(len(chi_eval))
+            self.sine_integral[1:] = np.cumsum(
+                [to_integrate.integrate(chi_eval[k], chi_eval[k + 1]) for k in range(len(chi_eval) - 1)])
+        try:
+            self.t_of_chi = scipy.interpolate.CubicSpline(chi_eval, tee * tfac)
+            self.chi_of_t = scipy.interpolate.CubicSpline(tee * tfac, chi_eval)
+            self.nut_of_chi = scipy.interpolate.CubicSpline(chi_eval, nuu * nufac)
+            self.nut_of_t = scipy.interpolate.CubicSpline(tee * tfac, nuu * nufac)
+            if zopt=='first':
+                self.sine_integral_of_chi = scipy.interpolate.CubicSpline(chi_eval, self.sine_integral)
+                self.cosine_integral_of_chi = scipy.interpolate.CubicSpline(chi_eval, self.cosine_integral)
+        except:
+            print("chi doesn't seem to be monotonic!!")
+            #TODO raise ValueError
+        
+        self.Tr = tee[-1] * tfac
+        self.phase_per_Tr = nuu[
+                                -1] * nufac
+        Wzeroes = np.zeros(self.ordershape)
+        W_inv_arr, shapezeroes = lbdata.invert(self.ordershape)
+        for i in range(self.ordershape):
+            ui = self.ubar * (1.0 + self.e * np.cos(shapezeroes[i]))
+            Wzeroes[i] = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0) * self.ubar * self.ubar / (
+                    (self.perU - ui) * (ui - self.apoU))
+        self.Ws = np.dot(W_inv_arr,
+                         Wzeroes) if wcorrs is None else np.dot(W_inv_arr,Wzeroes) + wcorrs
+        
+        self.Wpadded = np.array(list(self.Ws) + [0, 0, 0, 0])
+        ustar = 2.0 / (self.peri ** self.k + self.apo ** self.k)
+        self.half_esq_w0 = np.sqrt(self.essq(ustar) / self.ess(ustar)) - 1.0
+        etaIC = np.arccos((R ** -self.k / self.ubar - 1.0) / self.e)
+        if u > 0:
+            self.etaIC = etaIC
+        else:
+            self.etaIC = np.pi + (np.pi - etaIC)
+        self.phiIC = self.phi(self.etaIC)
+        self.thetaIC = theta 
+        chiIC = np.arccos((1.0 - R ** self.k / (0.5 * (1.0 / self.apoU + 1.0 / self.perU))) / self.e)
+        if u > 0:
+            self.chiIC = chiIC
+        else:
+            self.chiIC = np.pi + (np.pi - chiIC)
+        self.tperiIC = self.t_of_chi(self.chiIC)
+        self.nu_t_0 = np.arctan2(-w, z * self.nu(0)) - self.zphase_given_tperi(self.tperiIC)
+        if zopt=='integrate':
+            self.initialize_z(rtol=rtolz, atol=atolz, Neval=Nevalz)
+
+
+
+
+
+
+
+
 
 
 
@@ -1011,33 +1268,6 @@ class particle:
         vphi = self.h / r
 
         return r, phiabs, rdot, vphi
-
-class logPotential:
-    def __init__(self, vcirc):
-        self.vcirc = vcirc
-
-    def __call__(self, r):
-        return -self.vcirc ** 2 * np.log(r)
-
-    def Omega(self, r):
-        return self.vcirc / r
-
-    def gamma(self, r):
-        # TODO - I don't understand how this is hardcoded?
-        return np.sqrt(2.0)
-
-    def kappa(self, r):
-        res = self.Omega(r)
-        return res * res
-
-    def vc(self, r):
-        return self.vcirc
-
-    def ddr(self, r):
-        return -self.vcirc ** 2 / r
-
-    def ddr2(self, r):
-        return self.vcirc ** 2 / (r * r)
 
 class perturbationWrapper:
     """
