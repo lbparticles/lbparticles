@@ -53,6 +53,8 @@ How do the classes of the lbparticles operate?
 
 ## particle
 
+Uses [@Fiore:2022]
+
 ## logPotential
 
 
