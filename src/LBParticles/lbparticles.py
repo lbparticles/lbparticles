@@ -1,5 +1,4 @@
 import numpy as np
-from dataclasses import dataclass
 from enum import Enum
 import pickle
 import copy
@@ -313,54 +312,7 @@ class zoptEnum(Enum):
     ZERO = 5
 
 
-@dataclass(frozen=False)
 class particle:
-    ordershape: int
-    ordertime: int
-    nu0: float
-    alpha: float
-    r0: float
-    psi: any
-    x0: float
-    v0: float
-    hvec: np.ndarray
-    hhat: float
-    zopt: zoptEnum
-    rot: Rotation
-    Ez: float
-    h: float
-    epislon: float
-    peri: float
-    perU: float
-    apo: float
-    apoU: float
-    X: float
-    cRa: float
-    k: float
-    ell: float
-    m0sq: float
-    ubar: float
-    Ubar: float
-    vt0: float
-    IzIC: float
-    psiIC: float
-    chiIC: float
-    etaIC: float
-    phiIC: float
-    thetaIC: float
-    Tr: float
-    phaseTr: float
-    Ws: float
-    wpadded: float
-    half_esq_w0: float
-    t_of_chi: float
-    chi_of_t: float
-    vt_of_chi: float
-    vt_of_t: float
-    cosine_integral: float
-    sine_integral: float
-    sine_integral_of_chi: float
-    cosine_integral_of_chi: float
 
     def __init__(self,
                  xCartIn, vCartIn,
