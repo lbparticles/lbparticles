@@ -53,6 +53,16 @@ How do the classes of the lbparticles operate?
 
 ## particle
 
+Zopt:
+
+### 2Int
+
+### Fourier
+
+### Volterra
+
+### Tilt
+
 Uses [@Fiore:2022]
 
 ## logPotential
