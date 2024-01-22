@@ -3,7 +3,11 @@
 Detailed API documentation
 ==========================
 
-.. autofunction:: LBParticles.lbprecomputer
-.. autofunction:: LBParticles.particleLB
-.. autofunction:: LBParticles.logpotential
-.. autofunction:: LBParticles.getCartesianFromPolar
+.. autofunction:: lbparticles.precomputer
+.. autofunction:: lbparticles.particle
+.. autofunction:: lbparticles.potentialWrapper
+.. autofunction:: lbparticles.logPotential
+.. autofunction:: lbparticles.nfwPotential
+.. autofunction:: lbparticles.hernquistPotential
+.. autofunction:: lbparticles.powerlawPotential
+.. autofunction:: lbparticles.perturbationWrapper
