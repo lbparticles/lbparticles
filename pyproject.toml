@@ -36,6 +36,10 @@ Documentation = "https://github.com/unknown/lbparticles#readme"
 Issues = "https://github.com/unknown/lbparticles/issues"
 Source = "https://github.com/unknown/lbparticles"
 
+[project.optional-dependencies]
+test = ["pytest"]
+docs = ["sphinx>=7.2.6", "pandoc", "myst-nb", "sphinx-book-theme", "ipython"]
+
 [tool.hatch.version]
 path = "src/lbparticles/__about__.py"
 
