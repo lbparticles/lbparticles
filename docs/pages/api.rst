@@ -1,4 +1,4 @@
-.. module:: LBParticles
+.. module:: lbparticles
 
 Detailed API documentation
 ==========================
