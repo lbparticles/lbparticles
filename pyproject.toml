@@ -11,7 +11,9 @@ requires-python = ">=3.8"
 license = "MIT"
 keywords = []
 authors = [
-  { name = "U.N. Owen", email = "void@some.where" },
+    { name = "John Forbes", email = "john.forbes@canterbury.ac.nz" },
+    { name = "Jack Patterson", email = "jack.patterson@canterbury.ac.nz" },
+    { name = "Angus Forrest", email = "angus.forrest@canterbury.ac.nz" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -24,7 +26,10 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+    "numpy>=1.26.2",
+    "scipy>=1.11.3"
+]
 
 [project.urls]
 Documentation = "https://github.com/unknown/lbparticles#readme"
