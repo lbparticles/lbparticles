@@ -8,6 +8,8 @@ from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
 
+GRAVITY = 0.00449987  # pc^3 / (solar mass Myr^2)
+
 @dataclass
 class cartVec():
     x:float
