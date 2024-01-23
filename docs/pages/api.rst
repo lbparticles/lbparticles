@@ -5,6 +5,7 @@ Detailed API documentation
 
 .. autofunction:: lbparticles.Precomputer
 .. autofunction:: lbparticles.Particle
+.. autofunction:: lbparticles.Potential
 .. autofunction:: lbparticles.PotentialWrapper
 .. autofunction:: lbparticles.LogPotential
 .. autofunction:: lbparticles.NFWPotential
