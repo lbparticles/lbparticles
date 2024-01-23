@@ -1,6 +1,6 @@
-__all__ = ["precomputer", "particle", "perturbationWrapper", "potentialWrapper", "cartVec", "cylindVec",
-           "logPotential", "powerlawPotential", "hernquistPotential", "nfwPotential", "vertOptionEnum"]
+__all__ = ["Precomputer", "Particle", "PerturbationWrapper", "PotentialWrapper", "CartVec", "CylindVec",
+           "LogPotential", "PowerlawPotential", "HernquistPotential", "NFWPotential", "VertOptionEnum"]
 
-from lbparticles.lbparticles import precomputer, particle, perturbationWrapper, potentialWrapper, cartVec, cylindVec, vertOptionEnum
+from lbparticles.lbparticles import Precomputer, Particle, PerturbationWrapper, PotentialWrapper, CartVec, CylindVec, VertOptionEnum
 
-from lbparticles.potentials import logPotential, powerlawPotential, hernquistPotential, nfwPotential
+from lbparticles.potentials import LogPotential, PowerlawPotential, HernquistPotential, NFWPotential
