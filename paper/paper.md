@@ -1,5 +1,5 @@
 ---
-title: 'lbparticles: Semi-analytic particle model Python Package'
+title: "lbparticles: Semi-analytic particle model Python Package"
 tags:
   - Python
   - astronomy
@@ -26,12 +26,11 @@ date: 07 December 2023
 bibliography: paper.bib
 ---
 
-
 # Summary
 
 The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in a central potential at a galaxy scale. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to approximate analytical equations. The package is built upon Lynden-Bell's previous work [@Lynden:2015]
 
-The lbparticles package allows for the investigation into population dynamics of interstellar objects. 
+The lbparticles package allows for the investigation into population dynamics of interstellar objects.
 
 Are there similar projects in the past? Is this competely new application?
 
@@ -65,8 +64,7 @@ Zopt:
 
 Uses [@Fiore:2022]
 
-## logPotential
-
+## Potential
 
 # Design Principles
 
