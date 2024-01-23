@@ -1,4 +1,5 @@
-__all__ = ["precomputer","particle","perturbationWrapper","potentialWrapper","cartVec","cylindVec","logPotential","powerlawPotential","hernquistPotential","nfwPotential","vertOptionEnum"]
+__all__ = ["precomputer", "particle", "perturbationWrapper", "potentialWrapper", "cartVec", "cylindVec",
+           "logPotential", "powerlawPotential", "hernquistPotential", "nfwPotential", "vertOptionEnum"]
 
 from lbparticles.lbparticles import precomputer, particle, perturbationWrapper, potentialWrapper, cartVec, cylindVec, vertOptionEnum
 
