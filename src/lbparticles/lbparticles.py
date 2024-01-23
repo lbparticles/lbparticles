@@ -43,7 +43,7 @@ class VertOptionEnum(Enum):
 
 
 class Potential(ABC):
-    """Never use, override all functions"""
+    """This is an abstract class, always extend and override, never call directly"""
     @abstractmethod
     def __init__(self):
         pass
