@@ -1,69 +1,70 @@
 import numpy as np
-from lbparticles import potentialWrapper
+from lbparticles import Potential
 
-class logPotential():
+
+class LogPotential(Potential):
     def __init__(self):
         return 0
 
     def __call__(self):
         return 0
-    
+
     def ddr(self):
         return 0
 
     def ddr2(self):
         return 0
-    
+
     def name(self):
         return 0
-    
-    
-class nfwPotential():
+
+
+class NFWPotential(Potential):
     def __init__(self):
         return 0
 
     def __call__(self):
         return 0
-    
+
     def ddr(self):
         return 0
 
     def ddr2(self):
         return 0
-    
+
     def name(self):
         return 0
-    
-    
-class hernquistPotential():
+
+
+class HernquistPotential(Potential):
     def __init__(self):
         return 0
 
     def __call__(self):
         return 0
-    
+
     def ddr(self):
         return 0
 
     def ddr2(self):
         return 0
-    
+
     def name(self):
         return 0
-    
-class powerlawPotential():
+
+
+class PowerlawPotential(Potential):
     def __init__(self):
         return 0
 
     def __call__(self):
         return 0
-    
+
     def ddr(self):
         return 0
 
     def ddr2(self):
         return 0
-    
+
     def name(self):
         return 0
-    
