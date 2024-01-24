@@ -769,7 +769,7 @@ class PotentialWrapper():
         self.deltapsi_of_logr_fac = None if self.nur == None else self.initialize_deltapsi()
 
     def __call__(self, r, Iz0=0):
-        return self.potential(r) + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
+        return self.potential(r) if Iz0 == 0 else self.potential(r) + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
 
     def initialize_deltapsi(self):
         def to_integrate(r, _):
@@ -789,12 +789,12 @@ class PotentialWrapper():
         return self.Omega(r, Iz0=Iz0) * self.gamma(r)
 
     def ddr(self, r, Iz0=0):
-        return self.potential.ddr(r) + Iz0 / (r * r * self.nu(r)) * (
-                r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+        return self.potential.ddr(r) if Iz0 == 0 else self.potential.ddr(r)+ Iz0 / (r * r * self.nu(r)) * (
+            r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
 
     def ddr2(self, r, Iz0=0):
-        return self.potential.ddr2(r) + Iz0 / (r * r * self.nu(r)) * (
-                (-2.0 / r - self.dlnnudr(r)) * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)) + (
+        return self.potential.ddr2(r) if Iz0 == 0 else self.potential.ddr2(r) + Iz0 / (r * r * self.nu(r)) * (
+            (-2.0 / r - self.dlnnudr(r)) * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)) + (
                 r * self.potential.ddr3(r) + 0.5 * self.potential.ddr2(r)))
 
     def vc(self, r, Iz0=0):
@@ -806,8 +806,8 @@ class PotentialWrapper():
         return np.sqrt(2 * (beta + 1))
 
     def nu(self, r, Iz0=0):
-        return np.sqrt(self.nur(r) ** 2 - Iz0 / (r * r * r * self.nu(r)) * (
-                r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)))
+        return np.sqrt(self.nu(r) ** 2 - Iz0 / (r * r * r * self.nu(r)) * (
+            r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)))
 
     def name(self) -> str:
         return "PotentialWrapper_" + self.potential.name()
