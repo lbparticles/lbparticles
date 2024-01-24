@@ -82,6 +82,7 @@ class Particle():
             if hasattr(lbdata, 'alpha'):
                 self.alpha = lbdata.alpha
         self.rnought = rnought
+        self.psi = psir
         self.ordershape = ordershape
         self.ordertime = ordertime
         self.Necc = Necc
