@@ -1,8 +1,13 @@
+import lbparticles as lb
+
+
 class test_cartVec():
     def test_vector_cart_to_cylind():
-        return 0
+        assert type(lb.CartVec(0, 0, 0, 0, 0,
+                    0).cart_to_cylind) == lb.CylindVec
 
 
 class test_cylindVec():
     def test_vector_cylind_to_cart():
-        return 0
+        assert type(lb.CylindVec(0, 0, 0, 0, 0,
+                    0).cart_to_cylind) == lb.CartVec
