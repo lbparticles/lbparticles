@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import pickle
 import copy
@@ -11,7 +12,7 @@ from abc import ABC, abstractmethod
 from potentials import LogPotential
 
 
-@dataclass
+@dataclass(frozen=True)
 class CartVec():
     x: float = 0
     y: float = 0
@@ -20,8 +21,18 @@ class CartVec():
     vy: float = 0
     vz: float = 0
 
+    def cart_to_cylind(self) -> CylindVec:
+        r = np.sqrt(self.x * self.x + self.y * self.y)
+        return CylindVec(
+            r,
+            np.arctan2(self.y, self.x),
+            self.z,
+            (self.x * self.vx + self.y * self.vy) / r,
+            (self.x * self.vy - self.vx * self.y) / r,
+            self.vz)
 
-@dataclass
+
+@dataclass(frozen=True)
 class CylindVec():
     r: float = 0
     theta: float = 0
@@ -29,6 +40,13 @@ class CylindVec():
     vr: float = 0
     vtheta: float = 0
     vz: float = 0
+
+    def cylind_to_cart(self) -> CartVec:
+        x = self.r * np.cos(self.theta)
+        y = self.r * np.sin(self.theta)
+        vx = self.u * np.cos(self.theta) - self.vincl * np.sin(self.theta)
+        vy = self.u * np.sin(self.theta) + self.vincl * np.cos(self.theta)
+        return CartVec(x, y, self.z, vx, vy, self.vz)
 
 
 class VertOptionEnum(Enum):
