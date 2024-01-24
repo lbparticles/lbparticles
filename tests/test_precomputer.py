@@ -1,7 +1,6 @@
-from lbparticles import Precomputer
-import pytest
+from src.lbparticles.lbparticles import Precomputer
 
 
 class Test_Precomputer:
-    def test_creation(self):
+    def test_default_creation(self):
         lbdata = Precomputer()
