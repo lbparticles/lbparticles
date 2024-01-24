@@ -8,7 +8,7 @@ import scipy.spatial
 from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
-from src.lbparticles.potentials import Potential, LogPotential
+from lbparticles.potentials import Potential, LogPotential
 
 
 @dataclass(frozen=True)
