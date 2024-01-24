@@ -766,7 +766,7 @@ class PotentialWrapper():
         self.potential = potential
         self.dlnnur = dlnnur
         self.nur = nur
-        self.deltapsi_of_logr_fac = self.initialize_deltapsi()
+        self.deltapsi_of_logr_fac = None if self.nur == None else self.initialize_deltapsi()
 
     def __call__(self, r, Iz0=0):
         return self.potential(r) + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
