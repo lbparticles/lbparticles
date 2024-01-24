@@ -1,5 +1,29 @@
 import numpy as np
-from lbparticles import Potential
+from abc import ABC, abstractmethod
+
+
+class Potential(ABC):
+    """This is an abstract class, always extend and override, never call directly"""
+
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def __call__(self):
+        pass
+
+    @abstractmethod
+    def ddr(self):
+        pass
+
+    @abstractmethod
+    def ddr2(self):
+        pass
+
+    @abstractmethod
+    def name(self):
+        pass
 
 
 class LogPotential(Potential):
