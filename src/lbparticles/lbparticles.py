@@ -172,7 +172,7 @@ class Particle():
 
         def fpp(r, epsi, hi):
             return 2.0 * epsi + 2.0 * self.psi(r) - hi * hi / (r * r), 2.0 * (
-                self.psi.ddr(r) + hi * hi / (r * r * r)), 2.0 * (self.psi.ddr2(r) - hi * hi / (r * r * r * r))
+                    self.psi.ddr(r) + hi * hi / (r * r * r)), 2.0 * (self.psi.ddr2(r) - hi * hi / (r * r * r * r))
 
         rcirc = self.h / self.psi.vc(R)
         eff, effprime, effpp = fpp(rcirc, self.epsilon, self.h)
@@ -196,7 +196,7 @@ class Particle():
         self.k = np.log((-self.cRa - 1) / (self.cRp + 1)) / np.log(self.X)
 
         self.m0sq = 2 * self.k * (1.0 + self.cRp) / \
-            (1.0 - self.X ** -self.k) / (emcorr ** 2)
+                    (1.0 - self.X ** -self.k) / (emcorr ** 2)
         self.m0 = np.sqrt(self.m0sq)
 
         self.perU = self.peri ** -self.k
@@ -214,10 +214,10 @@ class Particle():
 
         nuk = 2.0 / self.k - 1.0
         tfac = self.ell * self.ell / \
-            (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5)) / tcorr
+               (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5)) / tcorr
         nufac = nunought * tfac * \
-            self.Ubar ** (-self.alpha / (2.0 * self.k)) / \
-            self.rnought ** (-self.alpha / 2.0)
+                self.Ubar ** (-self.alpha / (2.0 * self.k)) / \
+                self.rnought ** (-self.alpha / 2.0)
         if self.ordertime >= 0:
             timezeroes = cos_zeros(self.ordertime)
             wt_arr = np.zeros((self.ordertime, self.ordertime))
@@ -228,10 +228,10 @@ class Particle():
                 for j in np.arange(1, len(coeffs)):
                     coeffs[j] = np.cos(j * timezeroes[i])
                 wt_arr[i, :] = coeffs[:] * \
-                    (self.e * self.e * np.sin(timezeroes[i]) ** 2)
+                               (self.e * self.e * np.sin(timezeroes[i]) ** 2)
 
                 ui = self.ubar * \
-                    (1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i])))
+                     (1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i])))
                 ui2 = 1.0 / (0.5 * (1.0 / self.perU + 1.0 / self.apoU)
                              * (1.0 - self.e * np.cos(timezeroes[i])))
                 assert np.isclose(ui, ui2)
@@ -257,7 +257,7 @@ class Particle():
             if self.ordertime > 0:
                 for i in np.arange(1, self.ordertime + 2):
                     prefac = -self.wts_padded[i - 2] + 2 * \
-                        self.wts_padded[i] - self.wts_padded[i + 2]
+                             self.wts_padded[i] - self.wts_padded[i + 2]
                     if i == 1:
                         prefac = self.wts_padded[i] - self.wts_padded[
                             i + 2]
@@ -308,9 +308,9 @@ class Particle():
         else:
             def to_integrate(chi, dummy):
                 ui = self.ubar * \
-                    (1.0 + self.e * np.cos(self.eta_given_chi(chi)))
+                     (1.0 + self.e * np.cos(self.eta_given_chi(chi)))
                 ret = (1.0 - self.e * np.cos(chi)) ** nuk * \
-                    np.sqrt(self.essq(ui) / self.ess(ui))
+                      np.sqrt(self.essq(ui) / self.ess(ui))
                 if np.isnan(ret) or not np.isfinite(ret):
                     return 0.0
                 return ret
@@ -329,7 +329,7 @@ class Particle():
         for i in range(self.ordershape):
             ui = self.ubar * (1.0 + self.e * np.cos(shapezeroes[i]))
             Wzeroes[i] = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0) * self.ubar * self.ubar / (
-                (self.perU - ui) * (ui - self.apoU))
+                    (self.perU - ui) * (ui - self.apoU))
 
         self.Ws = np.dot(W_inv_arr, Wzeroes)
 
@@ -366,7 +366,7 @@ class Particle():
 
         if zopt == 'first' or zopt == 'zero':
             self.nu_t_0 = np.arctan2(-w, z * self.nu(0)) - \
-                self.zphase_given_tperi(self.tperiIC)
+                          self.zphase_given_tperi(self.tperiIC)
 
         if zopt == 'fourier':
             self.initialize_z_fourier(40, profile=profile)
@@ -450,12 +450,12 @@ class Particle():
 
     def effcos(self, chi):
         return -self.alpha * self.e / (2.0 * self.k) * (np.cos(2.0 * self.nu_t_0) * (
-            self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) - np.sin(
+                self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) - np.sin(
             2.0 * self.nu_t_0) * (self.sine_integral_of_chi(chi) - self.sine_integral_of_chi(self.chiIC)))
 
     def effsin(self, chi):
         return -self.alpha * self.e / (2.0 * self.k) * (np.sin(2.0 * self.nu_t_0) * (
-            self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) + np.cos(
+                self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) + np.cos(
             2.0 * self.nu_t_0) * (self.sine_integral_of_chi(chi) - self.sine_integral_of_chi(self.chiIC)))
 
     def initialize_z_fourier(self, zorder=20):
@@ -551,8 +551,8 @@ class Particle():
                                  np.exp(-(self.zmu + 2 * self.zrowind * 1j) * tau))
         vz = self.zDs[0] * np.sum(
             self.bvec * (self.zmu + 2 * self.zrowind * 1j) * np.exp((self.zmu + 2 * self.zrowind * 1j) * tau)) + \
-            self.zDs[1] * np.sum(self.bvec * -(self.zmu + 2 * self.zrowind * 1j)
-                                 * np.exp(-(self.zmu + 2 * self.zrowind * 1j) * tau))
+             self.zDs[1] * np.sum(self.bvec * -(self.zmu + 2 * self.zrowind * 1j)
+                                  * np.exp(-(self.zmu + 2 * self.zrowind * 1j) * tau))
         return z.real.flatten()[0], vz.real.flatten()[0] * np.pi / self.Tr
 
     def initialize_z_numerical(self, atol=1.0e-8, rtol=1.0e-8, Neval=1000):
@@ -618,7 +618,7 @@ class Particle():
         else:
             r, _, _, _ = self.rphi(0)
             self.IzIC = self.Ez / \
-                (self.nunought * (r / self.rnought) ** -(self.alpha / 2.0))
+                        (self.nunought * (r / self.rnought) ** -(self.alpha / 2.0))
 
         IZ = self.IzIC
         if self.zopt == 'zero':
@@ -640,17 +640,17 @@ class Particle():
                 sine_integral = self.effsin(chi_excess)
             else:
                 cosine_integral = self.effcos(2 * np.pi) \
-                    - self.alpha * self.e / (2.0 * self.k) * \
-                    (np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.cosine_integral_of_chi(
-                        chi_excess)
-                     - np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.sine_integral_of_chi(
-                        chi_excess))
+                                  - self.alpha * self.e / (2.0 * self.k) * \
+                                  (np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.cosine_integral_of_chi(
+                                      chi_excess)
+                                   - np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.sine_integral_of_chi(
+                                              chi_excess))
                 sine_integral = self.effsin(2 * np.pi) \
-                    - self.alpha * self.e / (2.0 * self.k) * \
-                    (np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.cosine_integral_of_chi(
-                        chi_excess)
-                     + np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.sine_integral_of_chi(
-                        chi_excess))
+                                - self.alpha * self.e / (2.0 * self.k) * \
+                                (np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.cosine_integral_of_chi(
+                                    chi_excess)
+                                 + np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr)) * self.sine_integral_of_chi(
+                                            chi_excess))
 
                 if Norb > 1:
                     arrCos = [np.cos(2.0 * (self.nu_t_0 + (i + 1) * self.phase_per_Tr))
@@ -697,20 +697,20 @@ class Particle():
     def phi(self, eta):
 
         ret = eta + 0.25 * self.e * self.e * \
-            (self.Wpadded[0] - self.Wpadded[2]) * eta
+              (self.Wpadded[0] - self.Wpadded[2]) * eta
         for i in np.arange(1, self.ordershape + 2):
             prefac = -self.Wpadded[i - 2] + 2 * \
-                self.Wpadded[i] - self.Wpadded[i + 2]
+                     self.Wpadded[i] - self.Wpadded[i + 2]
             if i == 1:
                 prefac = self.Wpadded[i] - self.Wpadded[i + 2]
 
             ret = ret + 0.25 * prefac * self.e * \
-                self.e * (1.0 / i) * np.sin(i * eta)
+                  self.e * (1.0 / i) * np.sin(i * eta)
 
         def to_integrate(etaIn):
             ui = self.ubar * (1.0 + self.e * np.cos(etaIn))
             W = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0) * self.ubar * self.ubar / (
-                (self.perU - ui) * (ui - self.apoU))
+                    (self.perU - ui) * (ui - self.apoU))
             return 1.0 + self.e * self.e * np.sin(etaIn) * np.sin(etaIn) * W
 
         return ret / self.m0
@@ -721,7 +721,7 @@ class Particle():
     def ess(self, u):
         r = u ** (-1.0 / self.k)
         return (2.0 * self.epsilon + 2.0 * self.psi(r) - self.h * self.h / (r * r)) * r * r / (self.h * self.h) * (
-            u * u * self.k * self.k)
+                u * u * self.k * self.k)
 
     def t(self, chi):
         return self.Tr / (2.0 * np.pi) * (chi - (self.V2 / self.V1 * self.e * np.sin(chi)))
@@ -815,11 +815,11 @@ class PotentialWrapper():
 
     def ddr(self, r, Iz0=0):
         return self.potential.ddr(r) + Iz0 / (r * r * self.nu(r)) * (
-            r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+                r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
 
     def ddr2(self, r, Iz0=0):
         return self.potential.ddr2(r) + Iz0 / (r * r * self.nu(r)) * (
-            (-2.0 / r - self.dlnnudr(r)) * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)) + (
+                (-2.0 / r - self.dlnnudr(r)) * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)) + (
                 r * self.potential.ddr3(r) + 0.5 * self.potential.ddr2(r)))
 
     def vc(self, r, Iz0=0):
@@ -832,7 +832,7 @@ class PotentialWrapper():
 
     def nu(self, r, Iz0=0):
         return np.sqrt(self.nur(r) ** 2 - Iz0 / (r * r * r * self.nu(r)) * (
-            r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)))
+                r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)))
 
     def name(self) -> str:
         return "PotentialWrapper_" + self.potential.name()
@@ -870,8 +870,7 @@ class Precomputer():
         self.es = np.zeros(self.N)
         self.Warrs = None
         self.shape_zeros = None
-        self.identifier = f"{time_order:0>2}_{
-            nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
+        self.identifier = f"{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
 
         v_target = self.init_first_pass()
         self.target_data, self.target_data_nuphase, self.chi_eval = self.init_second_pass(
@@ -1115,6 +1114,17 @@ class Precomputer():
 
         return ret, ret_nu
 
+    def precompute_inverses_up_to(self, max_shape_order, hard_reset=False):
+        if self.shape_zeros is None or hard_reset:
+            self.shape_zeros = {}
+        if self.Warrs is None or hard_reset:
+            self.Warrs = {}
+
+        for shape_order in range(max_shape_order + 1, -1, -1):
+            W_inv_arr, shape_zeros = self.invert(shape_order)
+            self.Warrs[shape_order] = W_inv_arr
+            self.shape_zeros[shape_order] = shape_zeros
+
     @classmethod
     def load(self, filename):
         with open(filename, 'rb') as file:
@@ -1135,16 +1145,3 @@ def cos_zeros(ordN):
     for i in range(ordN):
         the_zeros[i] = (np.pi / 2.0 + i * np.pi) / ordN
     return the_zeros
-
-
-def precompute_inverses_up_to(precomputer, max_shape_order, hard_reset=False):
-    if precomputer.shape_zeros is None or hard_reset:
-        precomputer.shape_zeros = {}
-    if precomputer.Warrs is None or hard_reset:
-        precomputer.Warrs = {}
-
-    for shape_order in range(max_shape_order + 1, -1, -1):
-        W_inv_arr, shape_zeros = precomputer.invert(shape_order)
-        precomputer.Warrs[shape_order] = W_inv_arr
-        precomputer.shape_zeros[shape_order] = shape_zeros
-    precomputer.save()
