@@ -1041,7 +1041,7 @@ class Precomputer:
         self.Warrs = None
         self.shape_zeros = None
         self.identifier = (
-            f"{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
+            f"big_{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
         )
 
         v_target = self.init_first_pass()
@@ -1337,7 +1337,7 @@ class Precomputer:
             return pickle.load(file)
 
     def save(self) -> None:
-        with open(f"{self.identifier}__lbpre.pickle", "wb") as file:
+        with open(f"{self.identifier}_lbpre.pickle", "wb") as file:
             pickle.dump(self, file)
 
 
