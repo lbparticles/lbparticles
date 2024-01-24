@@ -691,7 +691,7 @@ class interpolated_potential:
         r = np.asarray(rIn)
         ret = self.interp(r)
         ret = np.where( r<self.rmin, self.psibkg(r), ret )
-        ret = np.where( r>self.rmax, self.psibkg(r)+self.interp(self.rmax), ret)
+        ret = np.where( r>self.rmax, self.psibkg(r)+self.interp(self.rmax)-self.psibkg(self.rmax), ret)
         return ret
     def ddr(self, rIn):
         r = np.asarray(rIn)
@@ -2198,8 +2198,6 @@ def debug_spherical():
         psis_sorted = np.sort( psis, axis=0 )
         psi_of_perc = scipy.interpolate.CubicSpline( np.arange(deltapsis.shape[0])/float(deltapsis.shape[0]-1), psis_sorted, axis=0) 
 
-        pdb.set_trace()
-
 
         def to_min(corrs):
             perc, tfac = corrs
@@ -2209,7 +2207,6 @@ def debug_spherical():
             psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=dlnnudr)
 
             fac = 1.0
-            pdb.set_trace()
             part = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=tfac)
             rs = part.rvectorized(ts)
             return np.sum((rs-rsph)*(rs-rsph))
