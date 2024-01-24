@@ -806,6 +806,7 @@ class PotentialWrapper():
         return np.sqrt(2 * (beta + 1))
 
     def nu(self, r, Iz0=0):
+        # TODO Fix badness of recursive function
         return np.sqrt(self.nu(r) ** 2 - Iz0 / (r * r * r * self.nu(r)) * (
             r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)))
 
