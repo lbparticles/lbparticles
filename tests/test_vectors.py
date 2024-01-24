@@ -1,4 +1,4 @@
-from src.lbparticles.lbparticles import CylindVec, CartVec
+from lbparticles import CylindVec, CartVec
 
 
 class Test_cartVec:
