@@ -43,8 +43,8 @@ class CylindVec():
     def cylind_to_cart(self) -> CartVec:
         x = self.r * np.cos(self.theta)
         y = self.r * np.sin(self.theta)
-        vx = self.u * np.cos(self.theta) - self.vincl * np.sin(self.theta)
-        vy = self.u * np.sin(self.theta) + self.vincl * np.cos(self.theta)
+        vx = self.vr * np.cos(self.theta) - self.vtheta * np.sin(self.theta)
+        vy = self.vr * np.sin(self.theta) + self.vtheta * np.cos(self.theta)
         return CartVec(x, y, self.z, vx, vy, self.vz)
 
 

@@ -1,11 +1,11 @@
 from src.lbparticles.lbparticles import CylindVec, CartVec
 
 
-class test_cartVec:
-    def test_vector_cart_to_cylind():
-        assert type(CartVec(0, 0, 0, 0, 0, 0).cart_to_cylind) == CylindVec
+class Test_cartVec:
+    def test_vector_cart_to_cylind(self):
+        assert type(CartVec(1, 1, 1, 0, 0, 0).cart_to_cylind()) == CylindVec
 
 
-class test_cylindVec:
-    def test_vector_cylind_to_cart():
-        assert type(CylindVec(0, 0, 0, 0, 0, 0).cylind_to_cart) == CartVec
+class Test_cylindVec:
+    def test_vector_cylind_to_cart(self):
+        assert type(CylindVec(1, 1, 1, 0, 0, 0).cylind_to_cart()) == CartVec
