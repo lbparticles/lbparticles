@@ -10,11 +10,11 @@ extensions = [
 master_doc = "index"
 
 # General information about the project.
-project = "LBParticles"
-copyright = "2023 John Forbes & Contributors"
+project = "lbparticles"
+copyright = "2024 John Forbes & Contributors"
 
-version = importlib.metadata.version('LBParticles')
-release = importlib.metadata.version('LBParticles')
+version = importlib.metadata.version("lbparticles")
+release = importlib.metadata.version("lbparticles")
 
 exclude_patterns = ["_build"]
 html_theme = "sphinx_book_theme"
@@ -23,7 +23,7 @@ html_static_path = ["_static"]
 html_show_sourcelink = False
 html_theme_options = {
     "path_to_docs": "docs",
-    "repository_url": "https://github.com/LBParticles/LBParticles",
+    "repository_url": "https://github.com/lbparticles/lbparticles",
     "repository_branch": "main",
     "launch_buttons": {
         "binderhub_url": "https://mybinder.org",
@@ -38,3 +38,4 @@ html_theme_options = {
 html_baseurl = "https://lbparticles.readthedocs.io/en/latest/"
 nb_execution_mode = "force"
 html_sourcelink_suffix = ""
+napoleon_include_init_with_doc = True
