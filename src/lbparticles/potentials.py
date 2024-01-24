@@ -39,14 +39,14 @@ class NFWPotential(Potential):
 
 class HernquistPotential(Potential):
     def __init__(self, scale, gravity=0.00449987, mass=None, vcirc=None):
-        ''' Create a hernquistpotential object.
+        """ Create a hernquistpotential object.
         Parameters:
             scale - the scale radius of the potential in parsecs
             gravity - gravitational constant
             mass - the mass of the material producing the potential, in solar masses
             vcirc - the circular velocity at r=scale, in pc/Myr (close to km/s)
         Exactly one of mass or vcirc must be specified (not both)
-        '''
+        """
 
         if (mass is None and vcirc is None) or (not mass is None and not vcirc is None):
             raise Exception("Need to specify exactly one of mass, or vcirc.")
