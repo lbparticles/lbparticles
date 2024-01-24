@@ -10,15 +10,15 @@ class Potential(ABC):
         pass
 
     @abstractmethod
-    def __call__(self):
+    def __call__(self, r):
         pass
 
     @abstractmethod
-    def ddr(self):
+    def ddr(self, r):
         pass
 
     @abstractmethod
-    def ddr2(self):
+    def ddr2(self, r):
         pass
 
     @abstractmethod
