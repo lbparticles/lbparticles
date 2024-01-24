@@ -76,14 +76,13 @@ class Particle:
         debug=False,
         quickreturn=False,
         profile=False,
-        tilt=False,
         alpha=2.2,
         adhoc=None,
         nchis=300,
         Nevalz=1000,
         atolz=1.0e-7,
         rtolz=1.0e-7,
-        zopt="integrate",
+        zopt=VertOptionEnum.INTEGRATE,
         Necc=10,
     ):
         self.adhoc = adhoc
@@ -113,9 +112,8 @@ class Particle:
         vcross[1, 2] = -v[0]
         vcross[2, 1] = v[0]
         self.zopt = zopt
-        tilt = zopt == "tilt"
 
-        if tilt:
+        if self.zopt == VertOptionEnum.TILT:
             rot = np.eye(3) + vcross + vcross @ vcross * 1.0 / (1.0 + cose)
         else:
             rot = np.eye(3)
@@ -128,7 +126,7 @@ class Particle:
         x, y, z = xCart
         vx, vy, vz = vCart
 
-        if tilt:
+        if self.zopt == VertOptionEnum.TILT:
             assert np.isclose(z, 0)
             assert np.isclose(vz, 0)
 
@@ -266,7 +264,7 @@ class Particle:
                 self.e,
                 max_order=self.ordertime + 2,
                 include_Nu=(zopt == "first" or zopt == "zero"),
-                nchis=nchis
+                nchis=nchis,
             )
 
             tee = (
@@ -411,15 +409,15 @@ class Particle:
             self.chiIC = np.pi + (np.pi - chiIC)
         self.tperiIC = self.t_of_chi(self.chiIC)
 
-        if zopt == "first" or zopt == "zero":
+        if zopt == VertOptionEnum.FIRST or zopt == VertOptionEnum.ZERO:
             self.nu_t_0 = np.arctan2(-w, z * self.nu(0)) - self.zphase_given_tperi(
                 self.tperiIC
             )
 
-        if zopt == "fourier":
+        if zopt == VertOptionEnum.FOURIER:
             self.initialize_z_fourier(40, profile=profile)
 
-        if zopt == "integrate":
+        if zopt == VertOptionEnum.INTEGRATE:
             self.initialize_z_numerical(rtol=rtolz, atol=atolz, Neval=Nevalz)
 
     def getpart(self, t):
@@ -707,7 +705,7 @@ class Particle:
         return ret[0][0], ret[1][0]
 
     def zvz(self, t):
-        if self.zopt == "tilt":
+        if self.zopt == VertOptionEnum.TILT:
             return 0.0, 0.0
 
         tPeri = t + self.tperiIC
