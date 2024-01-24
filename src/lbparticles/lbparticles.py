@@ -263,12 +263,10 @@ class Particle:
             self.wts_padded = list(self.wts) + list([0, 0, 0, 0])
 
             t_terms, nu_terms = lbdata.get_t_terms(
-                self.k,
                 self.e,
-                maxorder=self.ordertime + 2,
-                includeNu=(zopt == "first" or zopt == "zero"),
-                nchis=nchis,
-                Necc=self.Necc,
+                max_order=self.ordertime + 2,
+                include_Nu=(zopt == "first" or zopt == "zero"),
+                nchis=nchis
             )
 
             tee = (
