@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
-from potentials import LogPotential
+from src.lbparticles.potentials import LogPotential
 
 
 @dataclass(frozen=True)
