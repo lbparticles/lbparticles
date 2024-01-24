@@ -13,6 +13,8 @@ from lbparticles.potentials import Potential, LogPotential
 
 @dataclass(frozen=True)
 class CartVec:
+    """DOCSTRING"""
+
     x: float = 0
     y: float = 0
     z: float = 0
@@ -34,6 +36,8 @@ class CartVec:
 
 @dataclass(frozen=True)
 class CylindVec:
+    """DOCSTRING"""
+
     r: float = 0
     theta: float = 0
     z: float = 0
@@ -50,6 +54,8 @@ class CylindVec:
 
 
 class VertOptionEnum(Enum):
+    """DOCSTRING"""
+
     INTEGRATE = 1
     FOURIER = 2
     TILT = 3
@@ -85,6 +91,7 @@ class Particle:
         zopt=VertOptionEnum.INTEGRATE,
         Necc=10,
     ):
+        """DOCSTRING"""
         self.adhoc = adhoc
         self.nunought = nunought
         self.alpha = alpha
@@ -910,12 +917,15 @@ class Particle:
 
 
 class PerturbationWrapper:
+    """DOCSTRING"""
+
     def __init__(self):
         return 0
 
 
 class PotentialWrapper:
     def __init__(self, potential: Potential, nur=None, dlnnur=None):
+        """DOCSTRING"""
         self.potential = potential
         self.dlnnur = dlnnur
         self.nur = nur
@@ -1020,6 +1030,7 @@ class Precomputer:
         eps=1.0e-8,
         gravity=0.00449987,
     ):
+        """DOCSTRING"""
         self.time_order = time_order
         self.shape_order = shape_order
         self.psir = psir
