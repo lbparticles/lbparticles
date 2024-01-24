@@ -1142,9 +1142,6 @@ class Precomputer:
                 )
         return interpolators, interpolators_nuphase
 
-    def gravity(self) -> float:
-        return self.gravity
-
     def add_new_data(self, nnew):
         N_start = len(self.es)
 
