@@ -8,8 +8,7 @@ import scipy.spatial
 from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
-from abc import ABC, abstractmethod
-from src.lbparticles.potentials import LogPotential
+from src.lbparticles.potentials import Potential, LogPotential
 
 
 @dataclass(frozen=True)
@@ -55,30 +54,6 @@ class VertOptionEnum(Enum):
     TILT = 3
     FIRST = 4
     ZERO = 5
-
-
-class Potential(ABC):
-    """This is an abstract class, always extend and override, never call directly"""
-
-    @abstractmethod
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def __call__(self):
-        pass
-
-    @abstractmethod
-    def ddr(self):
-        pass
-
-    @abstractmethod
-    def ddr2(self):
-        pass
-
-    @abstractmethod
-    def name(self):
-        pass
 
 
 class Particle():
