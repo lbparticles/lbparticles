@@ -6,6 +6,9 @@ import scipy.fft
 import scipy.spatial
 from scipy.spatial.transform import Rotation
 
+from tqdm import tqdm
+import pdb
+
 # Units throughout are Msun - pc - Myr so that 1 pc/Myr ~ 1 km/s
 G = 0.00449987  # pc^3 / (solar mass Myr^2)
 
@@ -674,20 +677,55 @@ def dbg_ek(lbpre, kIn, eIn):
 
 
 
+class interpolated_potential:
+    def __init__(self, rs, psis, psibkg):
+        self.rs = rs
+        self.rmin = np.min(rs)
+        self.rmax = np.max(rs)
+        self.psi = psis
+        self.psibkg= psibkg
+        self.interp = scipy.interpolate.CubicSpline( self.rs, self.psi )
+        self.interpdr = self.interp.derivative()
+        self.interpdr2 = self.interp.derivative(nu=2)
+    def __call__(self, rIn):
+        r = np.asarray(rIn)
+        ret = self.interp(r)
+        ret = np.where( r<self.rmin, self.psibkg(r), ret )
+        ret = np.where( r>self.rmax, self.psibkg(r)+self.interp(self.rmax), ret)
+        return ret
+    def ddr(self, rIn):
+        r = np.asarray(rIn)
+        ret = self.interpdr(r)
+        ret = np.where( r<self.rmin, self.psibkg.ddr(r), ret )
+        ret = np.where( r>self.rmax, self.psibkg.ddr(r), ret)
+        return ret
+
+    def ddr2(self, rIn):
+        r = np.asarray(rIn)
+        ret = self.interpdr2(r)
+        ret = np.where( r<self.rmin, self.psibkg.ddr2(r), ret )
+        ret = np.where( r>self.rmax, self.psibkg.ddr2(r), ret)
+        return ret
+
+    def ddr3(self, r):
+        return 0*r
+
+
+
 class potential_container:
-    def __init__(potential, nur=None, dlnnur=None):
+    def __init__(self, potential, nur=None, dlnnudr=None):
         self.potential = potential
         self.nur = nur # nu(r), the vertical oscillation frequency as fn of r
-        self.dlnnur = dlnnur
+        self.dlnnudr = dlnnudr
         if self.nur is None:
             pass
         else:
             self.initialize_deltapsi()
-            assert not self.dlnnur is None
+            assert not self.dlnnudr is None
 
     def initialize_deltapsi(self):
         def to_integrate( r, dummy ):
-            return 1.0/(r*r*self.nu(r)) * (r* self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+            return 1.0/(2*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))
         t_eval = np.logspace(-5, np.log10(300)*0.99999, 1000 )
         logr_eval = np.linspace(-5, np.log10(300)*0.99999, 1000)
         res = scipy.integrate.solve_ivp(to_integrate, [1.0e-5, 300], [0], method='DOP853', rtol=1.0e-13, atol=1.0e-13, t_eval=t_eval)
@@ -701,20 +739,27 @@ class potential_container:
         return self.Omega(r,Iz0=Iz0)*self.gamma(r)
 
     def ddr(self, r, Iz0=0):
-        return self.potential.ddr(r) + Iz0 /(r*r*self.nu(r)) * (r* self.potential.ddr2(r) - 0.5 * self.potential.ddr(r)) 
+        ret = self.potential.ddr(r) + Iz0 * 0.5/(r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r)) 
+        return ret
     def ddr2(self, r, Iz0=0):
-        return self.potential.ddr2(r) + Iz0/(r*r*self.nu(r)) * ( (-2.0/r - self.dlnnudr(r)) * (r*self.potential.ddr2(r) - 0.5*self.potential.ddr(r)) + (r*self.potential.ddr3(r) + 0.5*self.potential.ddr2(r) ) )
+        ret = self.potential.ddr2(r) + Iz0/(2.0*r*r*self.nur(r)) * ( (-2.0/r - self.dlnnudr(r)) * (r*self.potential.ddr2(r) - self.potential.ddr(r)) + (r*self.potential.ddr3(r)  ) )
+        return ret
     def __call__(self, r, Iz0=0):
-        return self.potential(r) + Iz0* self.deltapsi_of_logr_fac(np.log10(r))
+        ret = self.potential(r) + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
+        return ret
     def vc(self, r, Iz0=0):
-        return np.sqrt( r* self.ddr(r, Iz0) )
+        ret = np.sqrt( - r* self.ddr(r, Iz0) )
+        return ret
     def gamma(self, r, Iz0=0):
         # beta = dlnv/dlnr
         # beta = (r/v) dv/dr = (r/v) d/dr ( r dpsi/dr ) = (r/v) ( dpsi/dr + r d^2psi/dr^2 )
         beta = (r/self.vc(r,Iz0=Iz0)) * (self.ddr(r,Iz0=Iz0) + r*self.ddr2(r,Iz0=Iz0))
         return np.sqrt(2*(beta+1))
     def nu(self, r, Iz0=0):
-        return np.sqrt( self.nur(r)**2 -  Iz0 /(r*r*r*self.nu(r)) * (r* self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))  )
+        ret = np.sqrt( self.nur(r)**2 -  Iz0 /(2*r*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))  )
+        return ret
+    def name(self):
+        return 'wrapper_'+self.potential.name()
 
 class nfwpotential:
     def __init__(self, scale, mass):
@@ -775,6 +820,7 @@ class powerlawpotential:
         pass
 
 
+
 class logpotential:
     def __init__(self, vcirc, nur=None):
         self.vcirc = vcirc
@@ -806,6 +852,39 @@ class logpotential:
     def name(self):
         '''A unique name for the object'''
         return 'logpotential'+str(self.vcirc).replace('.','p')
+
+
+def particle_ivp3(t, y, psir, alpha, nu0 ):
+    '''The derivative function for scipy's solve_ivp - used to compare integrated particle trajectories to our semi-analytic versions'''
+    #vcirc = 220.0
+    #nu0 = np.sqrt(4.0*np.pi*G*0.2)
+    #alpha = 2.2
+    # y assumed to be a 6 x N particle array of positions and velocities.
+    xx = y[0,:]
+    yy = y[1,:]
+    zz = y[2,:]
+    vx = y[3,:]
+    vy = y[4,:]
+    vz = y[5,:]
+
+    r = np.sqrt(xx*xx + yy*yy + zz*zz)
+    rcyl = np.sqrt(xx*xx + yy*yy)
+    g = psir.ddr(r)
+    #g = -vcirc*vcirc / r
+    nu = nu0 * (rcyl/8100.0)**(-alpha/2.0)
+
+    res = np.zeros( y.shape )
+    res[0,:] = vx
+    res[1,:] = vy
+    res[2,:] = vz
+    res[3,:] = g*xx/r
+    res[4,:] = g*yy/r
+    res[5,:] = g*zz/r - zz*nu*nu
+
+
+    return res
+
+
 
 def particle_ivp2(t, y, psir, alpha, nu0 ):
     '''The derivative function for scipy's solve_ivp - used to compare integrated particle trajectories to our semi-analytic versions'''
@@ -841,11 +920,9 @@ def particle_ivp2(t, y, psir, alpha, nu0 ):
 class particleLB:
     # use orbits from Lynden-Bell 2015.
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
-    def __init__(self, xCartIn, vCartIn, psir, nunought, lbpre, rnought=8100.0, ordershape=1, ordertime=1, tcorr=True,
+    def __init__(self, xCartIn, vCartIn, psir, lbpre, ordershape=1, ordertime=1, tcorr=1.0, hcorr=1.0,
                  emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
-                 tilt=False, alpha=2.2, adhoc=None, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate',
-                 Necc=10):
-        self.adhoc = adhoc
+                 tilt=False, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate', Necc=10, spherical=0.75):
         # psir is psi(r), the potential as a function of radius.
         # don't understand things well enough yet, but let's start writing in some of the basic equations
 
@@ -854,12 +931,9 @@ class particleLB:
         # self.vcircBeta = vcircBeta
         # self.vcirc = vcirc
         # self.beta = 2.0 /np.sqrt(2.0*(vcircBeta+1.0)) ### beta = 2 Omega/kappa;   kappa = 2 Omega/beta
-        self.nunought = nunought
-        self.alpha = alpha
         if not lbpre is None:
             if hasattr(lbpre, 'alpha'):
                 self.alpha = lbpre.alpha
-        self.rnought = rnought
         self.psi = psir
         self.ordershape = ordershape
         self.ordertime = ordertime
@@ -867,6 +941,11 @@ class particleLB:
         self.nchis = nchis
         self.xCart0 = copy.deepcopy(xCartIn)  # in the global coordinate system
         self.vCart0 = copy.deepcopy(vCartIn)
+
+        self.sph = float(spherical)
+
+        if profile:
+            tim = timer()
 
         # everything internal should be rotated into this frame in such a way that it can be un-rotated!
         self.hvec = np.cross(xCartIn, vCartIn)
@@ -913,29 +992,30 @@ class particleLB:
         # thetadot = (x*vy - vx*y)/(R*R)
         w = vz
 
-        # Treat vertical motions with epicyclic approximation (3 hydra heads meme lol)
-        self.Ez = 0.5 * (w * w + (nunought * (R / self.rnought) ** (-alpha / 2.0)) ** 2 * z * z)
+        self.Ez = 0.5 * (w * w + self.psi.nu(R) ** 2 * z * z)
         # related quantity:
-        # https://arxiv.org/pdf/2205.01781.pdf#:~:text=We%20re%2Dexamine%20the%20time,%CF%892q%20under%20various%20regularity%20assumptions.
-        self.IzIC = self.Ez / (nunought * (R / self.rnought) ** -(alpha / 2.0))
-        self.psiIC = np.arctan2(z * (nunought * (R / self.rnought) ** -(alpha / 2.0)), w)
+        # https://arxiv.org/pdf/2205.01781.pdf
+        self.IzIC = self.Ez / self.psi.nu(R)
+        self.Ez = 0.5 * (w * w + self.psi.nu(R, self.IzIC*self.sph) ** 2 * z * z)
+        self.IzIC = self.Ez / self.psi.nu(R, Iz0=self.sph*self.IzIC) # one iteration
+        self.psiIC = np.arctan2(z * self.psi.nu(R,self.sph*self.IzIC), w)
         # self.phi0 = np.arctan2( -w, z*nu )
 
         # so here's what's going on:
 
-        self.h = R * v
+        self.h = R * v / hcorr
         self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(
-            R)  # deal with vertical motion separately -- convention is that psi positive
+            R, self.sph*self.IzIC)  # deal with vertical motion separately -- convention is that psi positive
 
         #        def extrema( r ):
         #            return 2.0*self.epsilon + 2.0*self.psi(r) - self.h*self.h/(r*r)
 
         def fpp(r, epsi, hi):
-            return 2.0 * epsi + 2.0 * self.psi(r) - hi * hi / (r * r), 2.0 * (
-                    self.psi.ddr(r) + hi * hi / (r * r * r)), 2.0 * (self.psi.ddr2(r) - hi * hi / (r * r * r * r))
+            return 2.0 * epsi + 2.0 * self.psi(r,Iz0=self.sph*self.IzIC) - hi * hi / (r * r), 2.0 * (
+                    self.psi.ddr(r,Iz0=self.sph*self.IzIC) + hi * hi / (r * r * r)), 2.0 * (self.psi.ddr2(r,Iz0=self.IzIC*self.sph) - hi * hi / (r * r * r * r))
 
         # approximate rdot^2 (i.e. extrema(r) defined above) as a parabola.
-        rcirc = self.h / self.psi.vc(R)
+        rcirc = self.h / self.psi.vc(R,Iz0=self.IzIC*self.sph)
         eff, effprime, effpp = fpp(rcirc, self.epsilon, self.h)
         curvature = -0.5 * effpp
         # peri_zero = rcirc - np.sqrt( eff/curvature )# very rough initial guess under parabola approximation
@@ -944,27 +1024,35 @@ class particleLB:
         apo_zero = np.max([rcirc * 2.0, R])
 
         res_peri = scipy.optimize.root_scalar(fpp, args=(self.epsilon, self.h), fprime=True, fprime2=True, x0=peri_zero,
-                                              method='halley', rtol=1.0e-8, xtol=1.0e-10)
+                                              method='halley', rtol=1.0e-12, xtol=1.0e-13)
         res_apo = scipy.optimize.root_scalar(fpp, args=(self.epsilon, self.h), fprime=True, fprime2=True, x0=apo_zero,
-                                             method='halley', rtol=1.0e-8, xtol=1.0e-10)
+                                             method='halley', rtol=1.0e-12, xtol=1.0e-13)
         # TODO Throw error
+        import pdb
         if res_peri.converged:
             self.peri = res_peri.root
+        else:
+            pdb.set_trace()
 
 
         # TODO Throw error
         if res_apo.converged:
             self.apo = res_apo.root
+        else:
+            pdb.set_trace()
 
+        
+        if self.apo<R or self.peri>R:
+            print("The particle is not within its peri-apo-center!")
+            pdb.set_trace()
 
 
         self.X = self.apo / self.peri
 
-        dr = 0.00001
         self.cRa = self.apo * self.apo * self.apo / (self.h * self.h) * self.psi.ddr(
-            self.apo)  # centrifugal ratio at apocenter
+            self.apo, self.IzIC*self.sph)  # centrifugal ratio at apocenter
         self.cRp = self.peri * self.peri * self.peri / (self.h * self.h) * self.psi.ddr(
-            self.peri)  # centrifugal ratio at pericenter
+            self.peri, self.IzIC *self.sph)  # centrifugal ratio at pericenter
         # TODO Throw ERROR
         #if not np.isfinite(self.cRa):
 
@@ -981,21 +1069,29 @@ class particleLB:
         self.apoU = self.apo ** -self.k
 
         self.e = (self.perU - self.apoU) / (self.perU + self.apoU)
-        if quickreturn:
-            return
         self.ubar = 0.5 * (self.perU + self.apoU)
         self.Ubar = 0.5 * (1.0 / self.perU + 1.0 / self.apoU)
 
         self.ell = self.ubar ** (-1.0 / self.k)
+        nuk = 2.0 / self.k - 1.0
 
-        chi_eval = lbpre.get_chi_arr(nchis)
+
 
         
 
-        nuk = 2.0 / self.k - 1.0
         tfac = self.ell * self.ell / (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5)) / tcorr
+        self.tfac = tfac
+
+        if quickreturn:
+            return
+
+        chi_eval = lbpre.get_chi_arr(nchis)
         #mytfac = self.Ubar ** nuk / (self.h * self.m0 * self.ubar * np.sqrt(1 - self.e * self.e))
-        nufac = nunought * tfac * self.Ubar ** (-self.alpha / (2.0 * self.k)) / self.rnought ** (-self.alpha / 2.0)
+        #nufac = nunought * tfac * self.Ubar ** (-self.alpha / (2.0 * self.k)) / self.rnought ** (-self.alpha / 2.0)
+        alpha = - 2*R*self.psi.dlnnudr(R)
+        rnought = R
+        nunought = self.psi.nu(R)
+        nufac = nunought * tfac * self.Ubar ** (-alpha / (2.0 * self.k)) / rnought ** (alpha / 2.0)
         if self.ordertime>=0:
             timezeroes = coszeros(self.ordertime)
             wt_arr = np.zeros((self.ordertime, self.ordertime))
@@ -1183,7 +1279,9 @@ class particleLB:
         # do some quick checks:
         condA = np.isclose(self.ubar * (1.0 + self.e * np.cos(self.etaIC)), R ** -self.k)
 
-        assert condA
+        if not condA:
+            print("self-consistency not great: ", self.ubar * (1.0 + self.e * np.cos(self.etaIC)), R ** -self.k )
+            pdb.set_trace()
 
         self.thetaIC = theta  # where the particle is in the "global" cylindrical coordinate system. I think we just have to move to add or subtract phiIC and thetaIC where appropriate.
 
@@ -1300,7 +1398,8 @@ class particleLB:
 
     def nu(self, t):
         #r, phiabs, rdot, vphi = self.rphi(t)
-        return self.nunought * (self.rvectorized(t) / self.rnought) ** (-self.alpha / 2.0)
+        #return self.nunought * (self.rvectorized(t) / self.rnought) ** (-self.alpha / 2.0)
+        return self.psi.nu( self.rvectorized(t), Iz0 = self.IzIC*self.sph)
 
     def Norb(self, t):
         past_peri = t % self.Tr
@@ -1336,7 +1435,8 @@ class particleLB:
         rs = self.r_given_chi(chi)
 
         # Myr^-2
-        nusqs = self.nunought**2 * (rs / self.rnought) ** (-self.alpha )
+        #nusqs = self.nunought**2 * (rs / self.rnought) ** (-self.alpha )
+        nusqs = self.psi.nu(rs, Iz0=self.IzIC*self.sph)**2
 
         # Need to convert nusq to the right units, namely tau-units.
         nusqs = nusqs * (self.Tr/np.pi)**2 # I think this is right..
@@ -1664,7 +1764,7 @@ class particleLB:
     def ess(self, u):
         # u = r**(-k) => du/dr = -k r^-(k+1) => r du/dr = -k r^-k = -k u
         r = u ** (-1.0 / self.k)
-        return (2.0 * self.epsilon + 2.0 * self.psi(r) - self.h * self.h / (r * r)) * r * r / (self.h * self.h) * (
+        return (2.0 * self.epsilon + 2.0 * self.psi(r, self.IzIC*self.sph) - self.h * self.h / (r * r)) * r * r / (self.h * self.h) * (
                 u * u * self.k * self.k)
 
     def t(self, chi):
@@ -1742,7 +1842,7 @@ class particleLB:
         r, mphi = self.emphi(eta)
         phiabs = mphi / self.m0 + (self.thetaIC - self.phiIC)  # mphi/em is the angle to the reference pericenter.
 
-        rdot = np.sqrt(2 * self.epsilon - self.h * self.h / (r * r) + 2.0 * self.psi(r)) * np.sign(
+        rdot = np.sqrt(2 * self.epsilon - self.h * self.h / (r * r) + 2.0 * self.psi(r,self.IzIC*self.sph)) * np.sign(
             np.sin(chi))  # this seems to be wrong!
         vphi = self.h / r
 
@@ -1786,14 +1886,38 @@ def rms(arr):
     return np.sqrt( np.mean( arr*arr ) )
 
 
+import time
+import matplotlib.pyplot as plt
+
+class timer:
+    def __init__(self):
+        self.ticks = [time.time()]
+        self.labels = []
+    def tick(self,label):
+        self.ticks.append(time.time())
+        self.labels.append(label)
+    def timeto(self, label):
+        if label in self.labels:
+            i = self.labels.index(label)
+            return self.ticks[i+1]-self.ticks[i]
+        else:
+            return np.nan
+    def report(self):
+        arr = np.array(self.ticks)
+        deltas = arr[1:]-arr[:-1]
+        print("Timing report:")
+        for i in range(len(self.labels)):
+            print(self.labels[i], deltas[i], 100*deltas[i]/np.sum(deltas),r'%')
+
 class benchmark_groundtruth:
-    def __init__(self, ts, xcart, vcart, psir, alpha, nu0):
+    def __init__(self, ts, xcart, vcart, psir, alpha, nu0, pivp):
         self.ts = ts
         self.xcart = copy.deepcopy(xcart)
         self.vcart = copy.deepcopy(vcart)
         self.psir = psir
         self.alpha = alpha
         self.nu0 = nu0
+        self.pivp = pivp
     def run(self):
         ics = np.zeros(6)
         ics[:3] = self.xcart[:]
@@ -1807,7 +1931,7 @@ class benchmark_groundtruth:
         tim = timer()
         for i,t in enumerate(self.ts):
             if i>0:
-                res = scipy.integrate.solve_ivp( particle_ivp2, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=1.0e-14, atol=1.0e-14, method='DOP853', args=(self.psir, self.alpha, self.nu0))
+                res = scipy.integrate.solve_ivp( self.pivp, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=1.0e-14, atol=1.0e-14, method='DOP853', args=(self.psir, self.alpha, self.nu0))
                 self.partarray[:,i] = res.y[:,-1]
                 tprev = t
         tim.tick('run')
@@ -1821,7 +1945,7 @@ class particle_benchmarker:
 
         # make sure the ground truth has been run with the same underlying assumptions as we are using to construct the model
         assert self.args[0] == self.groundtruth.psir
-        assert self.args[1] == self.groundtruth.nu0
+        #assert self.args[1] == self.groundtruth.nu0
 
         self.kwargs = kwargs
         self.identifier = identifier
@@ -1888,7 +2012,7 @@ class integration_benchmarker:
         ics = np.zeros(6)
         ics[:3] = self.groundtruth.xcart[:]
         ics[3:] = self.groundtruth.vcart[:]
-        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts)], ics, *self.args, args=(self.groundtruth.psir,self.groundtruth.alpha,self.groundtruth.nu0), t_eval=self.groundtruth.ts, **self.kwargs ) # RK4 vs DOP853 vs BDF.
+        res = scipy.integrate.solve_ivp(particle_ivp3, [0,np.max(self.groundtruth.ts)], ics, *self.args, args=(self.groundtruth.psir,self.groundtruth.alpha,self.groundtruth.nu0), t_eval=self.groundtruth.ts, **self.kwargs ) # RK4 vs DOP853 vs BDF.
         tim.tick('run')
         self.partarray = res.y
         self.runtim= tim.timeto('run')
@@ -1929,7 +2053,7 @@ class integration_benchmarker:
         ics = np.zeros(6)
         ics[:3] = self.groundtruth.xcart[:]
         ics[3:] = self.groundtruth.vcart[:]
-        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts[timerange[0]:timerange[1]])], ics, *self.args, args=(self.groundtruth.psir,self.groundtruth.alpha,self.groundtruth.nu0), t_eval=self.groundtruth.ts[timerange[0]:timerange[1]], **self.kwargs ) 
+        res = scipy.integrate.solve_ivp(particle_ivp3, [0,np.max(self.groundtruth.ts[timerange[0]:timerange[1]])], ics, *self.args, args=(self.groundtruth.psir,self.groundtruth.alpha,self.groundtruth.nu0), t_eval=self.groundtruth.ts[timerange[0]:timerange[1]], **self.kwargs ) 
         tim.tick('run')
         self.runtimes[identifier] = tim.timeto('run')
 
@@ -1942,13 +2066,377 @@ class integration_benchmarker:
             self.perierrs[identifier] = (partEnd.peri - partStart.peri)/partStart.peri
 
 
+def compute_psi_perturbations(rs, zs, ts, potential_container, IzIC, sphfac, filename ):
+
+    # z of r within a given half-period. minima and maxima
+    unambiguous_maxima = np.arange(len(rs))[1:-1][np.logical_and( rs[2:] < rs[1:-1], rs[:-2] < rs[1:-1])]
+    unambiguous_minima = np.arange(len(rs))[1:-1][np.logical_and( rs[2:] > rs[1:-1], rs[:-2] > rs[1:-1])]
+
+    minimum_first = unambiguous_minima[0] < unambiguous_maxima[0]
+    minimum_last = unambiguous_minima[-1] > unambiguous_maxima[-1]
+
+    fig,ax = plt.subplots()
+    
+    kmax = np.min([len(unambiguous_minima),len(unambiguous_maxima)]) - 1
+    offset = 0.0
+
+    r_eval = np.linspace( np.min(rs), np.max(rs), 1000)
+    deltapsis = np.zeros( (2*kmax, len(r_eval)) )
+
+    for k in range(kmax):
+        if minimum_first:
+            z_of_r_out = scipy.interpolate.InterpolatedUnivariateSpline( rs[unambiguous_minima[k]:unambiguous_maxima[k]+1],   zs[unambiguous_minima[k]:unambiguous_maxima[k]+1], k=1, ext=1)
+            z_of_r_in  = scipy.interpolate.InterpolatedUnivariateSpline( np.flip(rs[unambiguous_maxima[k]:unambiguous_minima[k+1]+1]), np.flip(zs[unambiguous_maxima[k]:unambiguous_minima[k+1]+1]), k=1, ext=1)
+        else:
+            z_of_r_in  = scipy.interpolate.InterpolatedUnivariateSpline( np.flip(rs[unambiguous_maxima[k]:unambiguous_minima[k]+1]), np.flip(zs[unambiguous_maxima[k]:unambiguous_minima[k]+1]), k=1, ext=1)
+            z_of_r_out = scipy.interpolate.InterpolatedUnivariateSpline( rs[unambiguous_minima[k]:unambiguous_maxima[k+1]+1], zs[unambiguous_minima[k]:unambiguous_maxima[k+1]+1], k=1, ext=1)
+
+        def to_integrate( r, dummy, z_of_r ):
+            return z_of_r(r)**2/(2.0*r*r) * (r* potential_container.potential.ddr2(r) -  potential_container.potential.ddr(r))
+        res_out = scipy.integrate.solve_ivp(to_integrate, [np.min(rs), np.max(rs)], [0], method='DOP853', rtol=1.0e-13, atol=1.0e-13, t_eval=r_eval, args=(z_of_r_out,))
+        res_in  = scipy.integrate.solve_ivp(to_integrate, [np.min(rs), np.max(rs)], [0], method='DOP853', rtol=1.0e-13, atol=1.0e-13, t_eval=r_eval, args=(z_of_r_in,))
+
+        if res_out.y.flatten()[2] > 1 or res_in.y.flatten()[2] > 1:
+            pdb.set_trace()
+
+        if minimum_first:
+            
+            ax.plot( r_eval, res_out.y.flatten()+offset, alpha=0.3, c=plt.cm.viridis(float(k)/kmax) )
+            ax.plot( r_eval, res_in.y.flatten() + (res_out.y.flatten()[-1]-res_in.y.flatten()[-1]) + offset,  alpha=0.3, c=plt.cm.viridis(float(k)/kmax) )
+
+            offset = res_in.y.flatten()[0] + (res_out.y.flatten()[-1]-res_in.y.flatten()[-1]) + offset
+
+        else:
+            # this one is too complicated to do properly
+            #ax.plot( r_eval, res_in.y.flatten() - res_in.y.flatten()[-1] +  offset,  alpha=0.3, c=plt.cm.viridis(float(k)/kmax) )
+            #ax.plot( r_eval, res_out.y.flatten() + offset -res_in.y.flatten()[-1], alpha=0.3, c=plt.cm.viridis(float(k)/kmax) )
+
+            #offset =  res_out.y.flatten()[-1] +  offset
+
+            ax.plot( r_eval, res_out.y.flatten()+offset, alpha=0.3, c=plt.cm.viridis(float(k)/kmax) )
+            ax.plot( r_eval, res_in.y.flatten() + (res_out.y.flatten()[-1]-res_in.y.flatten()[-1]) + offset,  alpha=0.3, c=plt.cm.viridis(float(k)/kmax) )
+
+            offset = res_in.y.flatten()[0] + (res_out.y.flatten()[-1]-res_in.y.flatten()[-1]) + offset
+
+        deltapsis[2*k+0,:] = res_in.y.flatten()
+        deltapsis[2*k+1,:] = res_out.y.flatten()
+
+
+    # now for comparison show the approximation that we're making:
+    def to_integrate( r, dummy):
+        return 1.0/(2.0*r*r*potential_container.nu(r)) * (r* potential_container.potential.ddr2(r) -  potential_container.potential.ddr(r))
+    r_eval = np.linspace( np.min(rs), np.max(rs), 1000)
+    res = scipy.integrate.solve_ivp(to_integrate, [np.min(rs), np.max(rs)], [0], method='DOP853', rtol=1.0e-13, atol=1.0e-13, t_eval=r_eval)
+    ax.plot( r_eval, res.y.flatten()*IzIC, c='k', zorder=2)
+    ax.plot( r_eval, res.y.flatten()*IzIC*sphfac, c='purple', zorder=2)
+
+    ax.set_xlabel('r')
+    ax.set_ylabel(r'$\delta \psi$')
+    plt.savefig(filename, dpi=300)
+    plt.close(fig)
+
+    return r_eval, deltapsis
+
+
+def windowedopp( ts, arr, twind, opp ):
+    res = np.zeros(len(arr))
+    assert len(ts)==len(arr)
+    for i, t in enumerate(ts):
+        selec = np.abs(ts-t) < twind
+        res[i] = opp(arr[selec])
+    return res
+
+
+
+def debug_spherical():
+    psirr = hernquistpotential(20000, vcirc=220)
+    nu0 = np.sqrt(4*np.pi*G*0.2)
+    alpha = 2.2
+    def nu(r):
+        return nu0 * (r/8100.0)**(-alpha/2.0)
+    def dlnnudr(r):
+        # lnnu = lnnu0 - (alpha/2) ln(r/8100)
+        # dlnnu/dr = -alpha/(2r)
+        return -alpha/(2.0*r)
+    psir = potential_container( psirr, nur=nu, dlnnudr=dlnnudr)
+    xCart = np.array([8100.0, 0.0, 21.0])
+    vCart = np.array([10.0, 230.0, 10.0])
+    ordertime=5
+    ordershape=14
+    ts = np.linspace( 0, 10000.0, 20000) # 10 Gyr, steps of 0.5 Myr
+    lbpre = lbprecomputer.load('big_10_0300_0010_hernquistpotential_scale20000_mass852664632533p8286_alpha2p2_lbpre.pickle')
+
+    Npart = 12
+    for ii in tqdm(range(Npart)):
+        stri = str(ii).zfill(3)
+
+        dx = np.random.randn(3)*200
+        dx[0] = dx[0] + np.random.randn()*500
+        dv = np.random.randn(3)*35.0
+        vCartThis = vCart + dv
+        xCartThis = xCart + dx
+        
+        gtsph = benchmark_groundtruth( ts, xCartThis, vCartThis, psir, alpha, nu0, particle_ivp3 )
+        gtsph.run()
+
+        gtcyl = benchmark_groundtruth( ts, xCartThis, vCartThis, psir, alpha, nu0, particle_ivp2 )
+        gtcyl.run()
+
+
+        partcyl = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=False, ordertime=6, ordershape=10, zopt='integrate', nchis=100)
+        partsph = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=True, ordertime=6, ordershape=10, zopt='integrate', nchis=100)
+
+        rsph = np.sqrt(gtsph.partarray[0,:]**2+gtsph.partarray[1,:]**2)
+        rcyl = np.sqrt(gtcyl.partarray[0,:]**2+gtcyl.partarray[1,:]**2)
+        zsph = gtsph.partarray[2,:]
+        zcyl = gtcyl.partarray[2,:]
+        peri = np.min(rsph)
+        apo = np.max(rsph)
+
+        r_eval, deltapsis = compute_psi_perturbations(rsph, zsph, ts, psir, partsph.IzIC, 1.0, 'dbgsph_rdpsi_'+stri+'.png')
+        psis = deltapsis + psirr(r_eval).reshape((1,len(r_eval))) # will this broadcast?
+        psis_sorted = np.sort( psis, axis=0 )
+        psi_of_perc = scipy.interpolate.CubicSpline( np.arange(deltapsis.shape[0])/float(deltapsis.shape[0]-1), psis_sorted, axis=0) 
+
+        pdb.set_trace()
+
+
+        def to_min(corrs):
+            perc, tfac = corrs
+            #tfac = corrs[0]
+            
+            psiThis = interpolated_potential( r_eval, psi_of_perc(perc), psirr )
+            psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=dlnnudr)
+
+            fac = 1.0
+            pdb.set_trace()
+            part = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=tfac)
+            rs = part.rvectorized(ts)
+            return np.sum((rs-rsph)*(rs-rsph))
+
+            #return (part.peri-peri)**2 + (part.apo-apo)**2
+        res = scipy.optimize.minimize(to_min, [0.9,1.0], bounds=[(0,1),(0.99, 1.01)] )
+        print(res.x[1])
+
+#        res = scipy.optimize.minimize(to_min, [1.0], bounds=[(0.99, 1.01)] )
+#        print(res)
+#        print(res.x)
+
+
+        #partopt = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=res.x[0], ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1])
+        psiThis = interpolated_potential( r_eval, psi_of_perc( res.x[0]), psirr )
+        psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=dlnnudr)
+        partopt = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=1.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1])
+            
+
+        historycyl = np.zeros( (7, len(ts) ) )
+        historysph = np.zeros( (7, len(ts) ) )
+        historyopt = np.zeros( (7, len(ts) ) )
+
+        history_integrated = np.zeros( (3, 10, len(ts)) ) # we want these to be particles initialized from the integrated data, but initialized how?
+        for i,t in enumerate(ts):
+            r,phi, rdot, vphi = partcyl.rphi(t)
+            z,vz = partcyl.zvz(t)
+            psi = np.arctan2( z*partcyl.psi.nu(r), vz )
+            historycyl[:,i] = [r, phi, rdot, vphi, z,vz, psi]
+
+            r,phi, rdot, vphi = partsph.rphi(t)
+            z,vz = partsph.zvz(t)
+            psi = np.arctan2( z*partsph.psi.nu(r,partsph.IzIC), vz )
+            historysph[:,i] = [r, phi, rdot, vphi, z,vz, psi]
+
+            r,phi, rdot, vphi = partopt.rphi(t)
+            z,vz = partopt.zvz(t)
+            psi = np.arctan2( z*partsph.psi.nu(r,partopt.IzIC*partopt.sph), vz )
+            historyopt[:,i] = [r, phi, rdot, vphi, z,vz, psi]
+
+            # now initialize a particle with the spherical solution to check which thing in tfac is actually changing and by how much
+            partcylThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=False, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+            partsphThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=True, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+            partoptThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psiContainerThis, lbpre, spherical=res.x[1], ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+
+            history_integrated[:, 0, i] = [partcylThis.h, partsphThis.h, partoptThis.h]
+            history_integrated[:, 1, i] = [partcylThis.X, partsphThis.X, partoptThis.X]
+            history_integrated[:, 2, i] = [partcylThis.k, partsphThis.k, partoptThis.k]
+            history_integrated[:, 3, i] = [partcylThis.m0, partsphThis.m0, partoptThis.m0]
+            history_integrated[:, 4, i] = [partcylThis.peri, partsphThis.peri, partoptThis.peri]
+            history_integrated[:, 5, i] = [partcylThis.apo, partsphThis.apo, partoptThis.apo]
+            history_integrated[:, 6, i] = [partcylThis.e, partsphThis.e, partoptThis.e]
+            history_integrated[:, 7, i] = [partcylThis.epsilon, partsphThis.epsilon, partoptThis.epsilon]
+            history_integrated[:, 8, i] = [partcylThis.ell, partsphThis.ell, partoptThis.ell]
+            history_integrated[:, 9, i] = [partcylThis.tfac, partsphThis.tfac, partoptThis.tfac]
+                
+
+        print('empirical peri and apo for sph potential: ', np.min(rsph), np.max(rsph))
+        print('empirical peri and apo for cyl potential: ', np.min(rcyl), np.max(rcyl))
+        print('lbparticle peri and apo for sph potential', partsph.peri, partsph.apo)
+        print('lbparticle peri and apo for cyl potential', partcyl.peri, partcyl.apo)
+
+
+
+        # check acceleration
+        a_true = particle_ivp3(None, gtsph.partarray, psir, alpha, nu0)
+        axy_true = np.sqrt(a_true[3,:]**2 + a_true[4,:]**2)
+        axy0 = psir.ddr( np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) )
+        #axyparticular = ax0 + gtsph.partarray[2,:]**2 * 0.5 * gtsph.partarray[0,:] / np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)**3 * (np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) * psir.ddr2(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)) - psir.ddr(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)))
+        axyest = psir.ddr(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), Iz0=partcyl.IzIC)  
+
+
+        ax0 = psir.ddr( np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) ) * gtsph.partarray[0,:] / np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)
+        axest = psir.ddr(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), Iz0=partcyl.IzIC)  * gtsph.partarray[0,:] / np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) # this one's a little silly because it's using an averaged z to compare to compare to a_true, which uses an actual value of z.
+        axparticular = ax0 + gtsph.partarray[2,:]**2 * 0.5 * gtsph.partarray[0,:] / np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)**3 * (np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) * psir.ddr2(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)) - psir.ddr(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)))
+
+
+        fig,axes = plt.subplots(nrows=5, ncols=2, figsize=(12,12))
+        ax = axes.flatten()
+        colors3 = ['b','r','purple']
+        labels3 = ['Cyl', 'Sph', 'Opt']
+        labels10 = ['h', 'X', 'k', 'm0', 'peri', 'apo', 'e', 'epsilon', 'ell', 'tfac']
+        for k in range(3):
+            for j in range(10):
+                label=None
+                if j==0:
+                    label=labels3[k]
+                ax[j].plot( ts, history_integrated[k,j,:], c=colors3[k], label=label )
+                ax[j].set_ylabel(labels10[j])
+                ax[j].set_xlim(0, 500)
+        ax[0].legend()
+        ax[9].axhline(partopt.tfac, c='mediumpurple') # "corrected" with the optimization procedure
+        ax[9].axhline(partopt.tfac*res.x[1], c='mediumpurple', ls='--') # what tfac would be without the correction.
+        plt.tight_layout()
+        plt.savefig('dbgsph_rconsts_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+
+
+        fig,ax = plt.subplots()
+        plt.hist2d( historycyl[0,:], np.sin(historycyl[6,:])**2, bins=30)
+        ax.set_xlabel('r')
+        ax.set_ylabel(r'$\sin^2(\psi)$')
+        plt.savefig('dbgsph_rpsi_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+        #pdb.set_trace()
+
+
+        # assumptions we can test here:
+        # z vs. r
+
+        rs = np.linspace(partcyl.peri, partcyl.apo, 100)
+        dr = rs[1]-rs[0]
+        fig,ax = plt.subplots()
+        sc = ax.scatter( historycyl[0,:], historycyl[4,:]**2, c=ts, alpha=0.3, s=5, lw=0 )
+        ax.plot( historycyl[0,:], historycyl[4,:]**2, c='k', zorder=-2 )
+        ax.plot(rs, partcyl.IzIC/nu(rs), c='r', zorder=-1)
+        actual_means = np.zeros(len(rs))
+        actual_means_early = np.zeros(len(rs))
+        actual_means_next= np.zeros(len(rs))
+        for i,r in enumerate(rs):
+            selec = np.logical_and(r-dr < rsph, rsph<r+dr)
+            if np.any(selec):
+                actual_means[i] = np.mean( zsph[selec]**2 )
+            selec2 = np.logical_and(selec, ts<1000.0)
+            if np.any(selec2):
+                actual_means_early[i] = np.mean( zsph[selec2]**2 )
+            selec3 = np.logical_and(np.logical_and(selec, ts<2000.0), ts>1000.0)
+            if np.any(selec3):
+                actual_means_next[i] = np.mean( zsph[selec3]**2 )
+        ax.plot(rs,actual_means, c='pink',zorder=1)
+        ax.plot(rs,actual_means_early, c='lightblue',zorder=1)
+        ax.plot(rs,actual_means_next, c='blue',zorder=2)
+        cb = plt.colorbar(sc)
+        ax.set_xlabel('r')
+        ax.set_ylabel(r'$z^2$')
+        plt.savefig('dbgsph_rz_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+        fig,ax = plt.subplots()
+        ax.plot( ts, windowedopp(ts, rsph, 1.1*partcyl.Tr, np.min), c='k' )
+        ax.axhline( partopt.peri)
+        ax.set_xlabel('t')
+        ax.set_ylabel('Windowed min')
+        plt.savefig('dbgsph_tperi_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+        fig,ax = plt.subplots()
+        ax.plot( ts, windowedopp(ts, rsph, 1.1*partcyl.Tr, np.max), c='k' )
+        ax.axhline( partopt.apo)
+        ax.set_xlabel('t')
+        ax.set_ylabel('Windowed max (pc)')
+        plt.savefig('dbgsph_tapo_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+
+        fig,ax = plt.subplots()
+        ax.plot( ts, historycyl[0,:] - np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='k', label='part cyl', alpha=0.5)
+        ax.plot( ts, historysph[0,:] - np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='r', label='part sph', alpha=0.5)
+        ax.plot( ts, historyopt[0,:] - np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='b', label='part opt', alpha=0.5)
+        ax.plot( ts, np.sqrt(gtcyl.partarray[0,:]**2 + gtcyl.partarray[1,:]**2) - np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='k', ls='--', label='int cyl', alpha=0.5)
+        #ax.plot( ts, np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='r', ls='--', label='int sph')
+        ax.set_xlabel('t')
+        ax.set_ylabel(r'$\Delta r$')
+        ax.legend()
+        #ax.set_xlim(0,3000)
+        plt.tight_layout()
+        plt.savefig('dbgsph_drt_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+        fig,ax = plt.subplots()
+        #ax.plot( ts, historycyl[0,:] - np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='k', label='part cyl', alpha=0.5)
+        ax.plot( ts, historysph[0,:] , c='r', label='part sph', alpha=0.5)
+        ax.plot( ts, historyopt[0,:] , c='b', label='part opt', alpha=0.5)
+        #ax.plot( ts, np.sqrt(gtcyl.partarray[0,:]**2 + gtcyl.partarray[1,:]**2) - np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='k', ls='--', label='int cyl', alpha=0.5)
+        ax.plot( ts, np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), c='k', ls='--', label='int sph')
+        ax.set_xlabel('t')
+        ax.set_ylabel(r'r')
+        ax.legend()
+        ax.set_xlim(9700,10000)
+        plt.tight_layout()
+        plt.savefig('dbgsph_rt_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+        fig,ax = plt.subplots()
+        #yy = axest - a_true[3,:]
+        yy = -axyest - axy_true
+        sc = ax.scatter( np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), yy, c=ts, alpha=0.3, lw=0, s=4)
+        cb = plt.colorbar(sc)
+        actual_means = np.zeros(len(rs))
+        actual_means_early = np.zeros(len(rs))
+        actual_means_next= np.zeros(len(rs))
+        for i,r in enumerate(rs):
+            selec = np.logical_and(r-dr < rsph, rsph<r+dr)
+            if np.any(selec):
+                actual_means[i] = np.mean( yy[selec] )
+            selec2 = np.logical_and(selec, ts<1000.0)
+            if np.any(selec2):
+                actual_means_early[i] = np.mean( yy[selec2] )
+            selec3 = np.logical_and(np.logical_and(selec, ts<2000.0), ts>1000.0)
+            if np.any(selec3):
+                actual_means_next[i] = np.mean( yy[selec3] )
+        ax.plot(rs,actual_means, c='pink',zorder=1)
+        ax.plot(rs,actual_means_early, c='lightblue',zorder=1)
+        ax.plot(rs,actual_means_next, c='blue',zorder=2)
+        ax.set_xlabel('Cylindrical Radius (pc)')
+        ax.set_ylabel('Acceleration error (pc/Myr/Myr)')
+        plt.tight_layout()
+        plt.savefig('dbgsph_raccel_'+stri+'.png', dpi=300)
+        plt.close(fig)
+
+
 
 
 def benchmark():
     #psir = logpotential(220.0)
-    psir = hernquistpotential(20000, vcirc=220)
+    psirr = hernquistpotential(20000, vcirc=220)
     nu0 = np.sqrt(4*np.pi*G*0.2)
     alpha = 2.2
+    def nu(r):
+        return nu0 * (r/8100.0)**(-alpha/2.0)
+    def dlnnudr(r):
+        # lnnu = lnnu0 - (alpha/2) ln(r/8100)
+        # dlnnu/dr = -alpha/(2r)
+        return -alpha/(2.0*r)
+    psir = potential_container( psirr, nur=nu, dlnnudr=dlnnudr)
     xCart = np.array([8100.0, 0.0, 21.0])
     vCart = np.array([10.0, 230.0, 10.0])
     ordertime=5
@@ -1973,43 +2461,43 @@ def benchmark():
     colors = []
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
     ids.append( r'$2\ \mathrm{Int }- n_\chi=100$' )
     simpleids.append('zintchi100')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'fourier', 'nchis':100, 'profile':True} )
     ids.append( r'Fourier - $n_\chi=100$' )
     simpleids.append('zintchi100')
     colors.append('orange')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':0, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot0')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':1, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot1')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':2, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot2')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':3, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot3')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':4, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot4')
@@ -2021,19 +2509,19 @@ def benchmark():
 #    simpleids.append('zintchi100ot5')
 #    colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':6, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot6')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':7, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot7')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':8, 'zopt':'integrate', 'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot8')
@@ -2042,58 +2530,58 @@ def benchmark():
 
     for ii in range(30):
 
-        argslist.append( (psir, nu0, lbpre) ) 
+        argslist.append( (psir, lbpre) ) 
         kwargslist.append( {'ordershape':ii, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':100} )
         ids.append( None )
         simpleids.append('zintchi100os'+str(ii).zfill(2))
         colors.append('b')
 
 
-#    argslist.append( (psir, nu0, lbpre) ) 
+#    argslist.append( (psir, lbpre) ) 
 #    kwargslist.append( {'ordershape':ordershape, 'ordertime':-5, 'zopt':'fourier', 'nchis':100} )
 #    ids.append( r'Fourier - ot-5 - $n_\chi=100$' )
 #    simpleids.append('zfourierchi100otm5')
 #    colors.append('gray')
 #
-#    argslist.append( (psir, nu0, lbpre) ) 
+#    argslist.append( (psir, lbpre) ) 
 #    kwargslist.append( {'ordershape':ordershape, 'ordertime':-10, 'zopt':'fourier', 'nchis':100} )
 #    ids.append( r'Fourier - ot-10 - $n_\chi=100$' )
 #    simpleids.append('zfourierchi100otm10')
 #    colors.append('lightblue')
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'zopt':'fourier', 'nchis':100} )
     ids.append( r'Fourier - $n_\chi=100$' )
     simpleids.append('zfourierchi100ot8')
     colors.append('yellow')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'zopt':'fourier', 'nchis':300} )
     ids.append( r'Fourier - $n_\chi=1000$' )
     simpleids.append('zfourierchi1000ot8')
     colors.append('green')
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':300} )
     ids.append( r'2 Int - $n_\chi=300$' )
     simpleids.append('zintchi300')
     colors.append('k')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'integrate', 'nchis':20} )
     ids.append( r'2 Int - $n_\chi=20$' )
     simpleids.append('zintchi20')
     colors.append('pink')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'first', 'nchis':100} )
     ids.append( r'1st Order - $n_\chi=100$' )
     simpleids.append('fiore1chi20')
     colors.append('maroon')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':'zero', 'nchis':100} )
     ids.append( r'Fiore 0th - $n_\chi=100$' )
     simpleids.append('fiore0chi100')
@@ -2150,7 +2638,7 @@ def benchmark():
         dv = np.random.randn(3)*25.0
         vCartThis = vCart + dv
         
-        gt = benchmark_groundtruth( ts, xCart, vCartThis, psir, alpha, nu0 )
+        gt = benchmark_groundtruth( ts, xCart, vCartThis, psir, alpha, nu0, particle_ivp3 )
         gt.run()
 
         for j in range(len(argslist)):
@@ -2456,6 +2944,9 @@ def dist_to_nearest_k(lbpre, k):
     return np.abs(lbpre.ks[i] - k)
 
 
+
+
+
 def getPolarFromCartesianXV(xv):
     x = xv[0, :]
     y = xv[1, :]
@@ -2528,3 +3019,7 @@ class perturbedParticle:
         else:
             assert False
 
+
+if __name__=='__main__':
+    #benchmark()
+    debug_spherical() # to try: changing potential. 2D histogram of psi (z phase) vs. r -- what about the stuff we were trying before like corrections to t and/or h? Instead of optimizing peri/apo, we could optimize something else (h avg? Actual Tr?) Another thought: try computing an actual average delta psi?
