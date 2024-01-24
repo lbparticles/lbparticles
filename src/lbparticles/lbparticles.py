@@ -8,8 +8,7 @@ from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
-
-from src.lbparticles.potentials import LogPotential
+from potentials import LogPotential
 
 
 @dataclass
@@ -65,11 +64,34 @@ class Potential(ABC):
 
 
 class Particle():
-    def __init__(self, xCartIn, vCartIn, psir, nunought, lbdata, rnought=8100.0, ordershape=1, ordertime=1, tcorr=True,
-                 emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
-                 tilt=False, alpha=2.2, adhoc=None, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7,
-                 zopt='integrate',
-                 Necc=10):
+    def __init__(
+            self,
+            xCartIn,
+            vCartIn,
+            psir,
+            nunought,
+            lbdata,
+            rnought=8100.0,
+            ordershape=1,
+            ordertime=1,
+            tcorr=True,
+            emcorr=1.0,
+            Vcorr=1.0,
+            wcorrs=None,
+            wtwcorrs=None,
+            debug=False,
+            quickreturn=False,
+            profile=False,
+            tilt=False,
+            alpha=2.2,
+            adhoc=None,
+            nchis=300,
+            Nevalz=1000,
+            atolz=1.0e-7,
+            rtolz=1.0e-7,
+            zopt='integrate',
+            Necc=10
+    ):
         self.adhoc = adhoc
         self.nunought = nunought
         self.alpha = alpha
@@ -419,7 +441,7 @@ class Particle():
             self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) + np.cos(
             2.0 * self.nu_t_0) * (self.sine_integral_of_chi(chi) - self.sine_integral_of_chi(self.chiIC)))
 
-    def initialize_z_fourier(self, zorder=20, profile=False):
+    def initialize_z_fourier(self, zorder=20):
         matr = np.zeros((zorder, zorder))
         coszeroes = coszeros(zorder)
         for i in range(zorder):
@@ -1004,16 +1026,6 @@ class Precomputer():
     def save(self):
         with open(f"{self.identifier}__lbpre.pickle", 'wb') as file:
             pickle.dump(self, file)
-
-
-class Particle():
-    def __init__(self):
-        return 0
-
-
-class PerturbationWrapper():
-    def __init__(self):
-        return 0
 
 
 def coszeros():
