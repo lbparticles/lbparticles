@@ -87,13 +87,12 @@ class Particle():
         self.ordertime = ordertime
         self.Necc = Necc
         self.nchis = nchis
-        self.xCart0 = copy.deepcopy(xCartIn)  # in the global coordinate system
+        self.xCart0 = copy.deepcopy(xCartIn)
         self.vCart0 = copy.deepcopy(vCartIn)
         self.hvec = np.cross(xCartIn, vCartIn)
         self.hhat = self.hvec / np.sqrt(np.sum(self.hvec * self.hvec))
 
         v = np.cross(np.array([0, 0, 1.0]), self.hhat)
-        sine = np.sqrt(np.sum(v * v))  # wait you don't actually use this lol
         cose = np.dot(self.hhat, np.array([0, 0, 1.0]))
 
         vcross = np.zeros((3, 3))
@@ -126,11 +125,8 @@ class Particle():
         R = np.sqrt(x * x + y * y)
         theta = np.arctan2(y, x)
         u = (x * vx + y * vy) / R
-        v = ((x * vy - vx * y) / R)  # used to subtract vcirc but unnecessarily
-        # thetadot = (x*vy - vx*y)/(R*R)
+        v = ((x * vy - vx * y) / R)
         w = vz
-
-        # Treat vertical motions with epicyclic approximation (3 hydra heads meme lol)
         self.Ez = 0.5 * (w * w + (nunought * (R / self.rnought)
                          ** (-alpha / 2.0)) ** 2 * z * z)
         self.IzIC = self.Ez / (nunought * (R / self.rnought) ** -(alpha / 2.0))
@@ -185,7 +181,6 @@ class Particle():
         nuk = 2.0 / self.k - 1.0
         tfac = self.ell * self.ell / \
             (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5)) / tcorr
-        # mytfac = self.Ubar ** nuk / (self.h * self.m0 * self.ubar * np.sqrt(1 - self.e * self.e))
         nufac = nunought * tfac * \
             self.Ubar ** (-self.alpha / (2.0 * self.k)) / \
             self.rnought ** (-self.alpha / 2.0)
@@ -226,12 +221,10 @@ class Particle():
                    (self.wts_padded[0] - self.wts_padded[2])) * nu_terms[0]
             if self.ordertime > 0:
                 for i in np.arange(1, self.ordertime + 2):
-                    # usual case
                     prefac = -self.wts_padded[i - 2] + 2 * \
                         self.wts_padded[i] - self.wts_padded[i + 2]
                     if i == 1:
                         prefac = self.wts_padded[i] - self.wts_padded[
-                            # w[i-2] would give you w[-1] or something, but this term should just be zero.
                             i + 2]
                     prefac = prefac * 0.25 * self.e * self.e
                     tee = tee + prefac * t_terms[i]
@@ -268,8 +261,6 @@ class Particle():
                     chi_eval, nuu * nufac)
                 self.nut_of_t = scipy.interpolate.CubicSpline(
                     tee * tfac, nuu * nufac)
-                # self.nut_of_chi = scipy.interpolate.CubicSpline( chi_eval, nu2 )
-                # self.nut_of_t= scipy.interpolate.CubicSpline( tee*tfac, nu2 )
                 if zopt == 'first':
                     self.sine_integral_of_chi = scipy.interpolate.CubicSpline(
                         chi_eval, self.sine_integral)
@@ -278,16 +269,11 @@ class Particle():
             except:
                 print("chi doesn't seem to be monotonic!!")
             self.Tr = tee[-1] * tfac
-            self.phase_per_Tr = nuu[
-                -1] * nufac  # the phase of the vertical oscillation advanced by the particle over 1 radial oscillation
-            # self.phase_per_Tr = nu2[-1]
+            self.phase_per_Tr = nuu[-1] * nufac
         else:
-            # exact.
             def to_integrate(chi, dummy):
-                # should never need this.
                 ui = self.ubar * \
                     (1.0 + self.e * np.cos(self.eta_given_chi(chi)))
-                # ui2 = 1.0 / (0.5 * (1.0 / self.perU + 1.0 / self.apoU) * (1.0 - self.e * np.cos(chi)))
                 ret = (1.0 - self.e*np.cos(chi))**nuk * \
                     np.sqrt(self.essq(ui) / self.ess(ui))
                 if np.isnan(ret) or not np.isfinite(ret):
@@ -302,13 +288,6 @@ class Particle():
                 self.chi_of_t = scipy.interpolate.CubicSpline(ys, chi_eval)
                 self.t_of_chi = scipy.interpolate.CubicSpline(chi_eval, ys)
                 self.Tr = self.t_of_chi(2.0*np.pi)
-
-        # pdb.set_trace()
-
-        # set up perturbation theory coefficients - note that this matrix inversion can be pre-computed for each order
-        # instead of for each particle - worry about that later I guess.
-        # shapezeroes = lbpre.shapezeroes    #coszeros( self.ordershape )
-        # the values of W[eta] at the zeroes of cos((n+1)eta)
         Wzeroes = np.zeros(self.ordershape)
         W_inv_arr, shapezeroes = lbdata.invert(self.ordershape)
         for i in range(self.ordershape):
@@ -316,9 +295,7 @@ class Particle():
             Wzeroes[i] = (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0) * self.ubar * self.ubar / (
                 (self.perU - ui) * (ui - self.apoU))
 
-        self.Ws = np.dot(W_inv_arr,
-                         # The array of W0, W1,... which will be helpful later! Possibly in the next line.
-                         Wzeroes)
+        self.Ws = np.dot(W_inv_arr, Wzeroes)
 
         if wcorrs is None:
             pass
@@ -331,14 +308,9 @@ class Particle():
         ustar = 2.0 / (self.peri ** self.k + self.apo ** self.k)
         self.half_esq_w0 = np.sqrt(self.essq(ustar) / self.ess(ustar)) - 1.0
 
-        # beware of name collision with midplane density used for vertical oscillations
         nulg = 2.0 / self.k - 1.0
-        # z Legendre to distinguish from the cylindrical/cartesian coordinate
         zlg = 1.0 / np.sqrt(1 - self.e * self.e)
-        # scipy.special.lpmv(2, nulg, zlg) - series expansion used internally doesn't work for z>1
         dz = zlg * 1.0e-5
-
-        # at initial:  u = ubar (1+e cos eta)
         etaIC = np.arccos((R ** -self.k / self.ubar - 1.0) / self.e)
         if u > 0:
             self.etaIC = etaIC
@@ -390,7 +362,6 @@ class Particle():
         return self.xvabs(t)[0]
 
     def getR(self, t):
-        # now ambiguous what R to return... currently returns cylindrical radius in the plane of the orbit.
         r, _, _, _ = self.rphi(t)
         return r
 
@@ -398,7 +369,6 @@ class Particle():
         return self.xvabs(t)[1]
 
     def uvwinclined(self, t):
-        # not aligned!
         r, phiabs, rdot, vphi = self.rphi(t)
         z, vz = self.zvz(t)
         return rdot, vphi, vz
@@ -413,11 +383,9 @@ class Particle():
 
         distsq = (xref - x) * (xref - x) + (yref - y) * (yref - y)
 
-        # use cosine formula
         thetarel = np.arccos((rsq + rrefsq - distsq) /
                              (2.0 * np.sqrt(rsq * rrefsq)))
 
-        # need to recover the sign somehow.
         th = np.arctan2(y, x)
         thref = np.arctan2(yref, xref)
 
@@ -426,14 +394,10 @@ class Particle():
         if np.isclose(np.abs(dtheta), thetarel, atol=1.0e-6):
             ang = dtheta
         else:
-            # dtheta is affected by wrapping so we have to be a bit more careful about using it to assign the sign for thetarel
-            # pdb.set_trace()
             if dtheta > np.pi:
                 ang = dtheta - 2.0 * np.pi
             elif dtheta < -np.pi:
                 ang = dtheta + 2.0 * np.pi
-            # TODO Throw Error
-            # if not np.isclose(np.abs(ang), thetarel):
 
         resX = r * np.cos(ang) - np.sqrt(rrefsq)
         resY = r * np.sin(ang)
@@ -441,7 +405,6 @@ class Particle():
         return resX, resY, z - zref
 
     def nu(self, t):
-        # r, phiabs, rdot, vphi = self.rphi(t)
         return self.nunought * (self.rvectorized(t) / self.rnought) ** (-self.alpha / 2.0)
 
     def Norb(self, t):
@@ -473,34 +436,27 @@ class Particle():
         chi = self.chi_given_tperi(tPeri)
         rs = self.r_given_chi(chi)
 
-        # Myr^-2
         nusqs = self.nunought**2 * (rs / self.rnought) ** (-self.alpha)
 
-        # Need to convert nusq to the right units, namely tau-units.
-        nusqs = nusqs * (self.Tr/np.pi)**2  # I think this is right..
-
-        # note that this is the same matrix used for computing phi, so if this is expensive we can swap this with a quick call to the precomputer.
+        nusqs = nusqs * (self.Tr/np.pi)**2
         thetans = np.linalg.inv(matr) @ nusqs
-        # bns may be off by a factor of 2, e.g. we may need bns = bns/2.0 because of the pi- rather than 2pi- periodic setup in these old papers.
         thetans = thetans/2.0
 
         thetans_padded = np.zeros(8*zorder+1)
         thetans_padded[:zorder] = thetans[:]
 
-        # next, we construct the B_mp matrix: 1's on the diagonal, and theta_{m-p}/(theta_0-4m^2)
         def get_bmp(bmpsize=2*zorder+1):
             Bmp = np.zeros((bmpsize, bmpsize))
             diag = zip(np.arange(bmpsize), np.arange(bmpsize))
             ms, ps = np.meshgrid(np.arange(bmpsize), np.arange(
-                bmpsize), indexing='ij')  # should double-check this probably
-            mneg = ms - (bmpsize-1)/2  # zorder
-            pneg = ps - (bmpsize-1)/2  # zorder
+                bmpsize), indexing='ij')
+            mneg = ms - (bmpsize-1)/2
+            pneg = ps - (bmpsize-1)/2
 
             ms = ms.flatten()
             ps = ps.flatten()
             mneg = mneg.flatten()
             pneg = pneg.flatten()
-            # because we have a cosine series the negative bns are the same as their positive counterparts.
             diffs = np.abs(mneg - pneg).astype(int)
 
             vals = thetans_padded[diffs]/(thetans[0] - 4*mneg*mneg)
@@ -509,20 +465,12 @@ class Particle():
             Bmp[np.arange(bmpsize), np.arange(bmpsize)] = 1.0
             return Bmp
 
-        # next, we take the determinant of the B_mp matrix.
-        # Bmp = get_bmp()
-        # det0 = np.linalg.det(Bmp)
-
         Bmp = get_bmp(4*zorder+1)
         det = np.linalg.det(Bmp)
 
-        # next, we find mu from said deterimant
         rhs = np.array(
             [-det * np.sin(np.pi/2.0 * np.sqrt(thetans[0]))**2]).astype(complex)
         mu = np.arcsinh(np.sqrt(rhs)) * 2.0/np.pi
-        # mu1 = np.arcsinh(np.sqrt(np.array([-det*np.sin(np.pi/2.0 * np.sqrt(thetans[0]))**2]).astype(complex))) * 2.0/np.pi # likely to be complex
-
-        # then we solve the linear equation for b_n (likely need to construct the corresponding matrix first). Keep in mind for both this matrix and the B_mp matrix, the indices used in the literature are symmetric about zero!
 
         bmatr = np.zeros((4*zorder+1, 4*zorder+1)).astype(complex)
 
@@ -534,7 +482,6 @@ class Particle():
             row = row/bnfac
 
             bmatr[i, :] = row[:]
-        # qr = np.linalg.qr(bmatr)
         U, ess, Vt = np.linalg.svd(bmatr)
         assert np.argmin(np.abs(ess)) == len(ess)-1
         assert np.min(np.abs(ess)) < 1.0e-3
@@ -759,7 +706,7 @@ class Particle():
 
         phi = self.phi(eta)
 
-        u = self.ubar * (1.0 + self.e * np.cos(eta))  # ez
+        u = self.ubar * (1.0 + self.e * np.cos(eta))
         r = u ** (-1.0 / self.k)
 
         return r, self.m0 * phi
