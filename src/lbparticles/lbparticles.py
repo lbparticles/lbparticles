@@ -841,10 +841,9 @@ class PotentialWrapper():
 class Precomputer():
     def __init__(
             self,
-            filename=None,
             time_order=10,
             shape_order=100,
-            psir=PotentialWrapper(LogPotential(220.0)),
+            psir: PotentialWrapper = PotentialWrapper(LogPotential(220.0)),
             e_target=0.08,
             nchis=1000,
             nks=100,
@@ -876,10 +875,6 @@ class Precomputer():
         self.target_data, self.target_data_nuphase, self.chi_eval = self.init_second_pass(
             v_target)
         self.interpolators, self.interpolators_nuphase = self.generate_interpolators()
-
-        if filename is not None:
-            self.load(filename)
-            self.add_new_data(1000)
 
     def init_first_pass(self):
         vs = np.linspace(self.vc / 10, self.vc * 2, self.N)
@@ -1126,11 +1121,11 @@ class Precomputer():
             self.shape_zeros[shape_order] = shape_zeros
 
     @classmethod
-    def load(self, filename):
+    def load(cls, filename) -> Precomputer:
         with open(filename, 'rb') as file:
             return pickle.load(file)
 
-    def save(self):
+    def save(self) -> None:
         with open(f"{self.identifier}__lbpre.pickle", 'wb') as file:
             pickle.dump(self, file)
 
