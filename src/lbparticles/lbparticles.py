@@ -878,16 +878,10 @@ class Precomputer():
             self.es[i] = particle.e
             self.ks[i] = particle.k
 
-        target_data = np.zeros((self.nchis, self.N,
-                                # TBD how to interpolate this. rn I'm thinking of doing a 1D interpolation
-                                # at each chi, then leave the particle to decide how it will interpolate that.
-                                self.time_order + 2))
+        target_data = np.zeros((self.nchis, self.N, self.time_order + 2))
 
-        target_data_nuphase = np.zeros((self.nchis, self.N,
-                                        # tbd how to interpolate this. rn I'm thinking of doing a 1D interpolation
-                                        # at each chi, then leave the particle to decide how it will interpolate
-                                        # that.
-                                        self.time_order + 2))
+        target_data_nuphase = np.zeros(
+            (self.nchis, self.N, self.time_order + 2))
 
         chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
         for j in range(self.N):
@@ -920,10 +914,10 @@ class Precomputer():
         for i in range(self.time_order + 2):
             for k in range(self.nchis):
                 interpolators[i, k] = scipy.interpolate.CubicSpline(sorted_e, self.target_data[
-                    k, sort_e, i])  # not obvious if we should pick es, ks, or do something fancier
+                    k, sort_e, i])
 
                 interpolators_nuphase[i, k] = scipy.interpolate.CubicSpline(sorted_e, self.target_data_nuphase[
-                    k, sort_e, i])  # not obvious if we should pick es, ks, or do something fancier
+                    k, sort_e, i])
         return interpolators, interpolators_nuphase
 
     def gravity(self) -> float:
@@ -932,7 +926,6 @@ class Precomputer():
     def add_new_data(self, nnew):
         N_start = len(self.es)
 
-        # Do the hardest ones first
         new_es = sorted(np.random.beta(0.9, 2.0, size=nnew))
         new_ks = [self.get_k_given_e(new_es[i]) for i in range(nnew)]
 
