@@ -9,11 +9,10 @@ from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
-
 from potentials import LogPotential
 
 
-@dataclass
+@dataclass(frozen=True)
 class CartVec():
     x: float = 0
     y: float = 0
@@ -22,8 +21,18 @@ class CartVec():
     vy: float = 0
     vz: float = 0
 
+    def cart_to_cylind(self) -> CylindVec:
+        r = np.sqrt(self.x * self.x + self.y * self.y)
+        return CylindVec(
+            r,
+            np.arctan2(self.y, self.x),
+            self.z,
+            (self.x * self.vx + self.y * self.vy) / r,
+            (self.x * self.vy - self.vx * self.y) / r,
+            self.vz)
 
-@dataclass
+
+@dataclass(frozen=True)
 class CylindVec():
     r: float = 0
     theta: float = 0
@@ -31,6 +40,13 @@ class CylindVec():
     vr: float = 0
     vtheta: float = 0
     vz: float = 0
+
+    def cylind_to_cart(self) -> CartVec:
+        x = self.r * np.cos(self.theta)
+        y = self.r * np.sin(self.theta)
+        vx = self.u * np.cos(self.theta) - self.vincl * np.sin(self.theta)
+        vy = self.u * np.sin(self.theta) + self.vincl * np.cos(self.theta)
+        return CartVec(x, y, self.z, vx, vy, self.vz)
 
 
 class VertOptionEnum(Enum):
@@ -66,12 +82,34 @@ class Potential(ABC):
 
 
 class Particle():
-    def __init__(self, xCartIn, vCartIn, psir, nunought, lbdata: Precomputer, rnought=8100.0, ordershape=1, ordertime=1,
-                 tcorr=True,
-                 emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
-                 tilt=False, alpha=2.2, adhoc=None, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7,
-                 zopt='integrate',
-                 Necc=10):
+    def __init__(
+            self,
+            xCartIn,
+            vCartIn,
+            psir,
+            nunought,
+            lbdata: Precomputer,
+            rnought=8100.0,
+            ordershape=1,
+            ordertime=1,
+            tcorr=True,
+            emcorr=1.0,
+            Vcorr=1.0,
+            wcorrs=None,
+            wtwcorrs=None,
+            debug=False,
+            quickreturn=False,
+            profile=False,
+            tilt=False,
+            alpha=2.2,
+            adhoc=None,
+            nchis=300,
+            Nevalz=1000,
+            atolz=1.0e-7,
+            rtolz=1.0e-7,
+            zopt='integrate',
+            Necc=10
+    ):
         self.adhoc = adhoc
         self.nunought = nunought
         self.alpha = alpha
@@ -420,7 +458,7 @@ class Particle():
                 self.cosine_integral_of_chi(chi) - self.cosine_integral_of_chi(self.chiIC)) + np.cos(
             2.0 * self.nu_t_0) * (self.sine_integral_of_chi(chi) - self.sine_integral_of_chi(self.chiIC)))
 
-    def initialize_z_fourier(self, zorder=20, profile=False):
+    def initialize_z_fourier(self, zorder=20):
         matr = np.zeros((zorder, zorder))
         coszeroes = cos_zeros(zorder)
         for i in range(zorder):
