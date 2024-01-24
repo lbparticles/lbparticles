@@ -208,6 +208,7 @@ class Particle:
         self.e = (self.perU - self.apoU) / (self.perU + self.apoU)
         if quickreturn:
             return
+
         self.ubar = 0.5 * (self.perU + self.apoU)
         self.Ubar = 0.5 * (1.0 / self.perU + 1.0 / self.apoU)
 
@@ -986,7 +987,8 @@ class PotentialWrapper:
         )
 
     def vc(self, r, Iz0=0):
-        return np.sqrt(r * self.ddr(r, Iz0))
+        """The minus sign is due to the force being inward towards the centre and thus having a negative sign in the potential"""
+        return np.sqrt(-r * self.ddr(r, Iz0))
 
     def gamma(self, r, Iz0=0):
         beta = (r / self.vc(r, Iz0=Iz0)) * (
