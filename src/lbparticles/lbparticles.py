@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
 
-from src.lbparticles.potentials import LogPotential
+from potentials import LogPotential
 
 
 @dataclass
@@ -829,8 +829,7 @@ class Precomputer():
         self.vc = self.psir.vc(R)
         self.ks = np.zeros(self.N)
         self.es = np.zeros(self.N)
-        self.identifier = f"{time_order:0>2}_{
-            nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
+        self.identifier = f"{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
 
         v_target = self.init_first_pass()
         self.target_data, self.target_data_nuphase, self.chi_eval = self.init_second_pass(
