@@ -17,19 +17,43 @@ class Potential(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, r):
+    def __call__(self, r: float):
+        """
+        The expression for the potential function with r being the variable
+        Parameters
+        ----------
+        r : float
+            The variable (radius) for central potential.
+        """
         pass
 
     @abstractmethod
-    def ddr(self, r):
+    def ddr(self, r: float):
+        """
+        The first derivative for the potential function with r being the variable
+        Parameters
+        ----------
+        r : float
+            The variable (radius) for central potential.
+        """
         pass
 
     @abstractmethod
-    def ddr2(self, r):
+    def ddr2(self, r: float):
+        """
+        The second derivative for the potential function with r being the variable
+        Parameters
+        ----------
+        r : float
+            The variable (radius) for central potential.
+        """
         pass
 
     @abstractmethod
     def name(self):
+        """
+        Describes the potential for use in uniquely identifing the Precomputer object once computation has finished
+        """
         pass
 
 
