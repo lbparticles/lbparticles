@@ -4,7 +4,13 @@ from abc import ABC, abstractmethod
 
 
 class Potential(ABC):
-    """This is an abstract class, always extend and override, never call directly"""
+    """
+    Describes a potential function including its first and second derivatives.
+
+    This is an abstract class; always extend and override, never call directly.
+
+    For example implementations see LogPotential, HernquistPotential, NFWPotential, and PowerlawPotential.
+    """
 
     @abstractmethod
     def __init__(self):

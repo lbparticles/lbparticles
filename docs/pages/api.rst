@@ -4,11 +4,17 @@ Detailed API documentation
 ==========================
 
 .. autoclass:: Potential
-.. autoclass:: lbparticles.LogPotential
-.. autoclass:: lbparticles.NFWPotential
-.. autoclass:: lbparticles.HernquistPotential
-.. autoclass:: lbparticles.PowerlawPotential
-.. autoclass:: lbparticles.PotentialWrapper
-.. autoclass:: lbparticles.Precomputer
-.. autoclass:: lbparticles.Particle
-.. autoclass:: lbparticles.PiecewiseParticleWrapper
+    .. automethod:: __call__
+.. autoclass:: LogPotential
+    .. automethod:: __call__
+.. autoclass:: NFWPotential
+    .. automethod:: __call__
+.. autoclass:: HernquistPotential
+    .. automethod:: __call__
+.. autoclass:: PowerlawPotential
+    .. automethod:: __call__
+.. autoclass:: PotentialWrapper
+    .. automethod:: __call__
+.. autoclass:: Precomputer
+.. autoclass:: Particle
+.. autoclass:: PiecewiseParticleWrapper
