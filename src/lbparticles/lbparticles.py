@@ -91,7 +91,9 @@ class Particle:
         zopt=VertOptionEnum.INTEGRATE,
         Necc=10,
     ):
-        """DOCSTRING"""
+        """
+            Instantiate a particle
+        """
         self.adhoc = adhoc
         self.nunought = nunought
         self.alpha = alpha

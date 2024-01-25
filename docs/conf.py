@@ -38,4 +38,10 @@ html_theme_options = {
 html_baseurl = "https://lbparticles.readthedocs.io/en/latest/"
 nb_execution_mode = "force"
 html_sourcelink_suffix = ""
-autoclass_content = "both"
+autodoc_default_options = {
+    'members': True,
+    'member-order': 'bysource',
+    'special-members': '__init__',
+    'undoc-members': True,
+    'exclude-members': '__weakref__'
+}
