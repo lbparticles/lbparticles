@@ -55,7 +55,7 @@ class Potential(ABC):
     @abstractmethod
     def name(self):
         """
-        Describes the potential for use in uniquely identifing the Precomputer object once computation has finished
+        Describes the potential for use in uniquely identifying the Precomputer object once computation has finished
         """
         pass
 
@@ -82,13 +82,13 @@ class NFWPotential(Potential):
     def __init__(self):
         return 0
 
-    def __call__(self):
+    def __call__(self, r):
         return 0
 
-    def ddr(self):
+    def ddr(self, r):
         return 0
 
-    def ddr2(self):
+    def ddr2(self, r):
         return 0
 
     def name(self):
@@ -145,13 +145,13 @@ class PowerlawPotential(Potential):
     def __init__(self):
         return 0
 
-    def __call__(self):
+    def __call__(self, r):
         return 0
 
-    def ddr(self):
+    def ddr(self, r):
         return 0
 
-    def ddr2(self):
+    def ddr2(self, r):
         return 0
 
     def name(self):
