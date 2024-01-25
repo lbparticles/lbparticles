@@ -69,9 +69,12 @@ class HernquistPotential(Potential):
 
         Parameters
         ----------
-        scale : float - The scale radius of the potential in parsecs
-        mass : float - The mass of the material producing the potential, in solar masses
-        gravity : float - The gravitational constant
+        scale : float
+            The scale radius of the potential in parsecs.
+        mass : float
+            The mass of the material producing the potential, in solar masses.
+        gravity : float
+            The gravitational constant.
         """
 
         self.mass = mass
