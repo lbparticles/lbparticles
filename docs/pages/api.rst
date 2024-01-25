@@ -11,4 +11,4 @@ Detailed API documentation
 .. autofunction:: lbparticles.NFWPotential
 .. autofunction:: lbparticles.HernquistPotential
 .. autofunction:: lbparticles.PowerlawPotential
-.. autofunction:: lbparticles.PerturbationWrapper
+.. autofunction:: lbparticles.PiecewiseParticleWrapper
