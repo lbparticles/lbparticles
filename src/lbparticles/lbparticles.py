@@ -1059,9 +1059,9 @@ class PotentialWrapper:
 class Precomputer:
     def __init__(
         self,
+        psir: PotentialWrapper,
         time_order=10,
         shape_order=100,
-        psir: PotentialWrapper = PotentialWrapper(LogPotential(220.0)),
         e_target=0.08,
         nchis=1000,
         nks=100,
