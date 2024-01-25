@@ -917,15 +917,27 @@ class Particle:
 
 
 class PiecewiseParticleWrapper:
-    """DOCSTRING"""
+    def __init__(self, particles: list(Particle) = [], splice_ts: list(float) = []):
+        """
+        Create a PiecewiseParticleWrapper object.
 
-    def __init__(self):
-        self.particles = []
-        self.splice_ts = []
+        Parameters
+        ----------
+        particles : list(Particle)
+            The scale radius of the potential in parsecs.
+        splice_ts : list(float)
+            The mass of the material producing the potential, in solar masses.
+        """
+        if len(particles) != len(splice_ts):
+            raise Exception("particles and splice_ts have different lengths!")
+        self.particles = particles
+        self.splice_ts = splice_ts
 
-    def add(self, t, particle):
-        self.splice_ts.append(t)
-        self.particles.append(particle)
+    def add(self, particles: list(Particle) = [], splice_ts: list(float) = []):
+        if len(particles) != len(splice_ts):
+            raise Exception("particles and splice_ts have different lengths!")
+        self.splice_ts.append(splice_ts)
+        self.particles.append(particles)
 
     def exists(self, t):
         # check whether the particle has been produced yet
