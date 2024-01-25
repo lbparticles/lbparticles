@@ -38,3 +38,4 @@ html_theme_options = {
 html_baseurl = "https://lbparticles.readthedocs.io/en/latest/"
 nb_execution_mode = "force"
 html_sourcelink_suffix = ""
+autoclass_content = "both"

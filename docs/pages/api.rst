@@ -3,12 +3,12 @@
 Detailed API documentation
 ==========================
 
-.. autofunction:: lbparticles.Precomputer
-.. autofunction:: lbparticles.Particle
-.. autofunction:: lbparticles.Potential
-.. autofunction:: lbparticles.PotentialWrapper
-.. autofunction:: lbparticles.LogPotential
-.. autofunction:: lbparticles.NFWPotential
-.. autofunction:: lbparticles.HernquistPotential
-.. autofunction:: lbparticles.PowerlawPotential
-.. autofunction:: lbparticles.PiecewiseParticleWrapper
+.. autoclass:: lbparticles.Precomputer
+.. autoclass:: lbparticles.Particle
+.. autoclass:: lbparticles.Potential
+.. autoclass:: lbparticles.PotentialWrapper
+.. autoclass:: lbparticles.LogPotential
+.. autoclass:: lbparticles.NFWPotential
+.. autoclass:: lbparticles.HernquistPotential
+.. autoclass:: lbparticles.PowerlawPotential
+.. autoclass:: lbparticles.PiecewiseParticleWrapper
