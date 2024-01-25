@@ -20,6 +20,7 @@ class Potential(ABC):
     def __call__(self, r: float):
         """
         The expression for the potential function with r being the variable
+
         Parameters
         ----------
         r : float
@@ -31,6 +32,7 @@ class Potential(ABC):
     def ddr(self, r: float):
         """
         The first derivative for the potential function with r being the variable
+
         Parameters
         ----------
         r : float
@@ -42,6 +44,7 @@ class Potential(ABC):
     def ddr2(self, r: float):
         """
         The second derivative for the potential function with r being the variable
+
         Parameters
         ----------
         r : float
