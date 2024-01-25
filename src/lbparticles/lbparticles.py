@@ -92,7 +92,7 @@ class Particle:
         Necc=10,
     ):
         """
-            Instantiate a particle
+        Instantiate a particle
         """
         self.adhoc = adhoc
         self.nunought = nunought
@@ -1092,15 +1092,15 @@ class Precomputer:
             f"big_{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
         )
 
-        v_target = self.init_first_pass()
+        v_target = self._init_first_pass()
         (
             self.target_data,
             self.target_data_nuphase,
             self.chi_eval,
-        ) = self.init_second_pass(v_target)
+        ) = self._init_second_pass(v_target)
         self.interpolators, self.interpolators_nuphase = self.generate_interpolators()
 
-    def init_first_pass(self):
+    def _init_first_pass(self):
         vs = np.linspace(self.vc / 10, self.vc * 2, self.N)
         for i in range(self.N):
             x_cart = [self.R, 0, 0]
@@ -1112,7 +1112,7 @@ class Precomputer:
         v_target = vs[i]
         return v_target
 
-    def init_second_pass(self, v_target):
+    def _init_second_pass(self, v_target):
         """
         Complete a second pass on a more useful range of velocities <--> e's <--> k's.
         """
