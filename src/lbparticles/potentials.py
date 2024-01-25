@@ -64,15 +64,16 @@ class NFWPotential(Potential):
 
 class HernquistPotential(Potential):
     def __init__(self, scale, mass, gravity=0.00449987):
-        """Create a hernquistpotential object.
-        Parameters:
-            scale - the scale radius of the potential in parsecs
-            gravity - gravitational constant
-            mass - the mass of the material producing the potential, in solar masses
-            vcirc - the circular velocity at r=scale, in pc/Myr (close to km/s)
-        Exactly one of mass or vcirc must be specified (not both)
-
         """
+        Create a HernquistPotential object.
+
+        Parameters
+        ----------
+        scale : float - The scale radius of the potential in parsecs
+        mass : float - The mass of the material producing the potential, in solar masses
+        gravity : float - The gravitational constant
+        """
+
         self.mass = mass
         self.scale = scale
         self.gravity = gravity
