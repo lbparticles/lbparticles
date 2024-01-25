@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
 
@@ -62,7 +63,7 @@ class NFWPotential(Potential):
 
 
 class HernquistPotential(Potential):
-    def __init__(self, scale, gravity=0.00449987, mass=None, vcirc=None):
+    def __init__(self, scale, mass, gravity=0.00449987):
         """Create a hernquistpotential object.
         Parameters:
             scale - the scale radius of the potential in parsecs
@@ -70,16 +71,19 @@ class HernquistPotential(Potential):
             mass - the mass of the material producing the potential, in solar masses
             vcirc - the circular velocity at r=scale, in pc/Myr (close to km/s)
         Exactly one of mass or vcirc must be specified (not both)
-        """
 
-        if (mass is None and vcirc is None) or (not mass is None and not vcirc is None):
-            raise Exception("Need to specify exactly one of mass, or vcirc.")
-        if mass is None:
-            self.mass = vcirc * vcirc * 4.0 * scale / gravity
-        else:
-            self.mass = mass
+        """
+        self.mass = mass
         self.scale = scale
         self.gravity = gravity
+
+    @classmethod
+    def vcirc(cls, scale, vcirc, gravity=0.00449987) -> HernquistPotential:
+        return HernquistPotential(scale, vcirc * vcirc * 4.0 * scale / gravity, gravity)
+
+    @classmethod
+    def mass(cls, scale, mass, gravity=0.00449987) -> HernquistPotential:
+        return HernquistPotential(scale, mass, gravity)
 
     def __call__(self, r):
         return self.gravity * self.mass / (r + self.scale)

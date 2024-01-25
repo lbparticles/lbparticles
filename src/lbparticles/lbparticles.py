@@ -916,11 +916,38 @@ class Particle:
         return r, phiabs, rdot, vphi
 
 
-class PerturbationWrapper:
+class PiecewiseParticleWrapper:
     """DOCSTRING"""
 
     def __init__(self):
-        return 0
+        self.particles = []
+        self.splice_ts = []
+
+    def add(self, t, particle):
+        self.splice_ts.append(t)
+        self.particles.append(particle)
+
+    def exists(self, t):
+        # check whether the particle has been produced yet
+        return t >= self.splice_ts[0]
+
+    def getpart(self, t):
+        i = np.searchsorted(self.ts, t, side="left")
+        return self.splice_ts[i - 1], self.particles[i - 1]
+
+    def xabs(self, t):
+        if self.exists(t):
+            tref, part = self.getpart(t)
+            return part.xabs(t - tref)
+        else:
+            assert False
+
+    def xvabs(self, t):
+        if self.exists(t):
+            tref, part = self.getpart(t)
+            return part.xvabs(t - tref)
+        else:
+            assert False
 
 
 class PotentialWrapper:

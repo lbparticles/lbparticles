@@ -21,13 +21,13 @@ class Test_LogPotential:
 @pytest.mark.parametrize("r", np.linspace(0.1, 400, 100))
 class Test_HernquistPotential:
     def test_call(self, r):
-        psir = HernquistPotential(2.2, vcirc=220.0)
+        psir = HernquistPotential.vcirc(2.2, 220.0)
         psir(r)
 
     def test_ddr(self, r):
-        psir = HernquistPotential(2.2, vcirc=220.0)
+        psir = HernquistPotential.vcirc(2.2, 220.0)
         psir.ddr(r)
 
     def test_ddr2(self, r):
-        psir = HernquistPotential(2.2, vcirc=220.0)
+        psir = HernquistPotential.vcirc(2.2, 220.0)
         psir.ddr2(r)

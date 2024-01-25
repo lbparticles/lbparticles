@@ -1,7 +1,7 @@
 __all__ = [
     "Precomputer",
     "Particle",
-    "PerturbationWrapper",
+    "PiecewiseParticleWrapper",
     "PotentialWrapper",
     "CartVec",
     "CylindVec",
@@ -16,7 +16,7 @@ __all__ = [
 from lbparticles.lbparticles import (
     Precomputer,
     Particle,
-    PerturbationWrapper,
+    PiecewiseParticleWrapper,
     PotentialWrapper,
     CartVec,
     CylindVec,
