@@ -4,7 +4,7 @@ Detailed API documentation
 ==========================
 
 .. autoclass:: Potential
-    .. automethod:: __call__
+    :special-members:: __init__, __call__
 .. autoclass:: LogPotential
     .. automethod:: __call__
 .. autoclass:: NFWPotential
