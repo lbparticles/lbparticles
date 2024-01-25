@@ -919,15 +919,15 @@ class Particle:
 
 
 class PiecewiseParticleWrapper:
-    def __init__(self, particles: list(Particle) = [], splice_ts: list(float) = []):
+    def __init__(self, particles: list[Particle] = [], splice_ts: list[float] = []):
         """
         Create a PiecewiseParticleWrapper object.
 
         Parameters
         ----------
-        particles : list(Particle)
+        particles : list[Particle]
             The scale radius of the potential in parsecs.
-        splice_ts : list(float)
+        splice_ts : list[float]
             The mass of the material producing the potential, in solar masses.
         """
         if len(particles) != len(splice_ts):
@@ -935,7 +935,7 @@ class PiecewiseParticleWrapper:
         self.particles = particles
         self.splice_ts = splice_ts
 
-    def add(self, particles: list(Particle) = [], splice_ts: list(float) = []):
+    def add(self, particles: list[Particle] = [], splice_ts: list[float] = []):
         if len(particles) != len(splice_ts):
             raise Exception("particles and splice_ts have different lengths!")
         self.splice_ts.append(splice_ts)
