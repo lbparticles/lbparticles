@@ -43,5 +43,6 @@ autodoc_default_options = {
     'members': True,
     'member-order': 'bysource',
     'undoc-members': True,
-    'exclude-members': '__weakref__'
+    'exclude-members': '__weakref__',
+    'private-members': False
 }
