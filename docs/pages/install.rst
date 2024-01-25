@@ -6,8 +6,9 @@ Installation
 Dependencies
 ------------
 
-LBParticles depends on ``numpy`` and ``scipy``. These will be
-installed automatically when you install LBParticles through `pip <http://www.pip-installer.org/>`_.
+LBParticles depends on ``numpy`` and ``scipy``. 
+
+These will be installed automatically when you install LBParticles through `pip <http://www.pip-installer.org/>`_.
 
 Using pip
 ---------
