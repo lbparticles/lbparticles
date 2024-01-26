@@ -1070,7 +1070,7 @@ class Precomputer:
         Nnuk=5,
         alpha=2.2,
         logodds_initialized=False,
-        vwidth=20,
+        vwidth=50,
         R=8100.0,
         eps=1.0e-8,
         gravity=0.00449987,
@@ -1088,15 +1088,16 @@ class Precomputer:
         self.eps = eps
         self.gravity = gravity
         self.vc = self.psir.vc(R)
-        self.ks = np.zeros(self.N)
-        self.es = np.zeros(self.N)
         self.Ninterp = Ninterp
+        self.ks = np.zeros(self.Ninterp)
+        self.es = np.zeros(self.Ninterp)
         self.Nnuk = Nnuk
         self.Necc = Necc
         self.logodds_initialized = logodds_initialized
         self.Warrs = None
         self.shape_zeros = None
         self.ek_logodds = None
+        self.chi_eval = None
         self.identifier = (
             f"big_{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
         )
@@ -1104,10 +1105,8 @@ class Precomputer:
         v_target = self._init_first_pass()
         (
             self.target_data,
-            self.target_data_nuphase,
-            self.chi_eval,
+            self.target_data_nuphase
         ) = self._init_second_pass(v_target)
-        self.interpolators, self.interpolators_nuphase = self.generate_interpolators()
 
     def _init_first_pass(self):
         vs = np.linspace(self.vc / 10, self.vc * 2, self.Ninterp)
@@ -1163,17 +1162,17 @@ class Precomputer:
         self.nukclusters = 2.0 / self.kclusters - 1.0
         self.mukclusters = self.nukclusters - self.alpha / (2.0 * self.kclusters)
 
-        chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
+        self.chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
         for j in range(self.Nclusters):
             for i in range(self.time_order + 2):
                 for jj in range(self.Necc):
                     for m in range(self.Nnuk):
                         # t_terms.append(res.y.flatten())
                         y0, y1 = self.evaluate_integrals(self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m)
-                        self.target_data[:, j, jj, i, m] = y0
-                        self.target_data_nuphase[:, j, jj, i, m] = y1
+                        target_data[:, j, jj, i, m] = y0
+                        target_data_nuphase[:, j, jj, i, m] = y1
 
-        return target_data, target_data_nuphase, chi_eval
+        return target_data, target_data_nuphase
 
     def evaluate_integrals(self, chis, jj, kIn, eIn, n, m):
         nuk = 2.0 / kIn - 1.0
