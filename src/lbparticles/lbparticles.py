@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 from enum import Enum
 from lbparticles.potentials import Potential, LogPotential
+import multiprocessing
 
 
 @dataclass(frozen=True)
@@ -1103,10 +1104,7 @@ class Precomputer:
         )
 
         v_target = self._init_first_pass()
-        (
-            self.target_data,
-            self.target_data_nuphase
-        ) = self._init_second_pass(v_target)
+        (self.target_data, self.target_data_nuphase) = self._init_second_pass(v_target)
 
     def _init_first_pass(self):
         vs = np.linspace(self.vc / 10, self.vc * 2, self.Ninterp)
@@ -1124,7 +1122,9 @@ class Precomputer:
         """
         Complete a second pass on a more useful range of velocities <--> e's <--> k's.
         """
-        vs = np.linspace(v_target - self.vwidth, v_target + self.vwidth, self.Ninterp - 22)
+        vs = np.linspace(
+            v_target - self.vwidth, v_target + self.vwidth, self.Ninterp - 22
+        )
         vs = np.concatenate([vs, np.zeros(22) + 1000])
         v_close_ind = np.argmin(np.abs(vs - self.vc))
         v_close = np.abs(vs[v_close_ind] - self.vc)
@@ -1149,9 +1149,13 @@ class Precomputer:
 
         self._initialize_e_of_k()
 
-        target_data = np.zeros((self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk))
+        target_data = np.zeros(
+            (self.nchis, self.Nclusters, self.time_order + 2, self.Necc, self.Nnuk)
+        )
 
-        target_data_nuphase = np.zeros((self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk))
+        target_data_nuphase = np.zeros(
+            (self.nchis, self.Nclusters, self.time_order + 2, self.Necc, self.Nnuk)
+        )
 
         self.eclusters = np.linspace(0.05, 0.95, self.Nclusters)
         self.kclusters = np.zeros(self.Nclusters)
@@ -1163,58 +1167,138 @@ class Precomputer:
         self.mukclusters = self.nukclusters - self.alpha / (2.0 * self.kclusters)
 
         self.chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
-        for j in range(self.Nclusters):
-            for i in range(self.time_order + 2):
-                for jj in range(self.Necc):
-                    for m in range(self.Nnuk):
-                        # t_terms.append(res.y.flatten())
-                        y0, y1 = self.evaluate_integrals(self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m)
-                        target_data[:, j, jj, i, m] = y0
-                        target_data_nuphase[:, j, jj, i, m] = y1
+
+        a1 = np.arange(self.Nclusters)
+        a2 = np.arange(self.time_order + 2)
+        a3 = np.arange(self.Necc)
+        a4 = np.arange(self.Nnuk)
+
+        proc_count = multiprocessing.cpu_count()
+
+        proc_data = np.array_split(a1, proc_count)
+
+        def eval_proc(a1, a2, a3, a4, res_shape, queue1, queue2):
+            res_data = np.zeros_like(res_shape)
+            res_data_nu = np.zeros_like(res_shape)
+            for _w in a1:
+                for _x in a2:
+                    for _y in a3:
+                        for _z in a4:
+                            y0, y1 = self.evaluate_integrals(
+                                self.chi_eval,
+                                _y,
+                                self.kclusters[_w],
+                                self.eclusters[_w],
+                                _x,
+                                _z,
+                            )
+                            res_data[:, _w, _x, _y, _z] = y0
+                            res_data_nu[:, _w, _x, _y, _z] = y1
+
+            queue1.put(res_data)
+            queue2.put(res_data_nu)
+
+        processes = np.array([])
+        queue1 = multiprocessing.Queue()
+        queue2 = multiprocessing.Queue()
+        for i in range(proc_count):
+            res_shape = np.zeros(
+                (
+                    self.nchis,
+                    len(proc_data[i]),
+                    self.time_order + 2,
+                    self.Necc,
+                    self.Nnuk,
+                )
+            )
+            process = multiprocessing.Process(
+                target=eval_proc,
+                args=(proc_data[i], a2, a3, a4, res_shape, queue1, queue2),
+            )
+            processes.append(process)
+            process.start()
+
+        for i in range(proc_count):
+            process.join()
+
+        while not queue1.empty():
+            np.append(target_data, queue1.get())
+        while not queue2.empty():
+            np.append(target_data_nuphase, queue2.get())
 
         return target_data, target_data_nuphase
 
     def evaluate_integrals(self, chis, jj, kIn, eIn, n, m):
         nuk = 2.0 / kIn - 1.0
         muk = 2.0 / kIn - 1.0 - self.alpha / (2.0 * kIn)
-        deltapsi = scipy.special.polygamma(0, nuk + 1) - scipy.special.polygamma(0, nuk + 1 - jj)
+        deltapsi = scipy.special.polygamma(0, nuk + 1) - scipy.special.polygamma(
+            0, nuk + 1 - jj
+        )
 
         def to_integrate(chi, val):
-            return (1.0 - eIn * np.cos(chi)) ** (nuk - jj) * np.cos(chi) ** jj * np.cos(n * chi) * (
-                        deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
+            return (
+                (1.0 - eIn * np.cos(chi)) ** (nuk - jj)
+                * np.cos(chi) ** jj
+                * np.cos(n * chi)
+                * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
+            )
 
-        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi], [0], vectorized=True,
-                                        rtol=1.0e-14, atol=1.0e-14, t_eval=chis, method='DOP853')
+        res = scipy.integrate.solve_ivp(
+            to_integrate,
+            [0, 2.0 * np.pi],
+            [0],
+            vectorized=True,
+            rtol=1.0e-14,
+            atol=1.0e-14,
+            t_eval=chis,
+            method="DOP853",
+        )
 
         assert np.all(np.isclose(res.t, self.chi_eval))
         y0 = res.y.flatten()
 
-        deltapsi = scipy.special.polygamma(0, muk + 1) - scipy.special.polygamma(0, muk + 1 - jj)
+        deltapsi = scipy.special.polygamma(0, muk + 1) - scipy.special.polygamma(
+            0, muk + 1 - jj
+        )
 
         def to_integrate(chi, val):
-            return (1.0 - eIn * np.cos(chi)) ** (nuk - jj - self.alpha / (2.0 * kIn)) * np.cos(n * chi) * np.cos(
-                chi) ** jj * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
+            return (
+                (1.0 - eIn * np.cos(chi)) ** (nuk - jj - self.alpha / (2.0 * kIn))
+                * np.cos(n * chi)
+                * np.cos(chi) ** jj
+                * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
+            )
 
-        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi], [0], vectorized=True,
-                                        rtol=1.0e-14, atol=1.0e-14, t_eval=chis, method='DOP853')
+        res = scipy.integrate.solve_ivp(
+            to_integrate,
+            [0, 2.0 * np.pi],
+            [0],
+            vectorized=True,
+            rtol=1.0e-14,
+            atol=1.0e-14,
+            t_eval=chis,
+            method="DOP853",
+        )
         y1 = res.y.flatten()
 
         return y0, y1
 
-
     def e_of_k(self, k):
-        """ The object's internal map between k and e0. """
+        """The object's internal map between k and e0."""
         return 1.0 / (1.0 + np.exp(self.ek_logodds(k)))
 
     def _initialize_e_of_k(self):
         if self.logodds_initialized:
             raise Exception(
-                "The e-k relationship has already been initialized and it is trying to be initialized again. This is extremely dangerous because the e-k relationship is baked in to the indexing scheme already.")
+                "The e-k relationship has already been initialized and it is trying to be initialized again. This is extremely dangerous because the e-k relationship is baked in to the indexing scheme already."
+            )
         to_sort_k = np.argsort(self.ks)
         x = self.ks[to_sort_k]
         y = np.clip(np.log(1.0 / self.es[to_sort_k] - 1.0), -1.0, 2.5)
         valid = np.logical_and(np.isfinite(x), np.isfinite(y))
-        self.ek_logodds = scipy.interpolate.InterpolatedUnivariateSpline(x[valid], y[valid], k=1)
+        self.ek_logodds = scipy.interpolate.InterpolatedUnivariateSpline(
+            x[valid], y[valid], k=1
+        )
         self.logodds_initialized = True
 
     def invert(self, order_shape):
