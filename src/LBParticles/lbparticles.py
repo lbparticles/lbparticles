@@ -690,7 +690,7 @@ class interpolated_potential:
     def __call__(self, rIn):
         r = np.asarray(rIn)
         ret = self.interp(r)
-        ret = np.where( r<self.rmin, self.psibkg(r), ret )
+        ret = np.where( r<self.rmin, self.psibkg(r)+self.interp(self.rmin)-self.psibkg(self.rmin), ret)
         ret = np.where( r>self.rmax, self.psibkg(r)+self.interp(self.rmax)-self.psibkg(self.rmax), ret)
         return ret
     def ddr(self, rIn):
@@ -718,7 +718,9 @@ class potential_container:
         self.nur = nur # nu(r), the vertical oscillation frequency as fn of r
         self.dlnnudr = dlnnudr
         if self.nur is None:
-            pass
+            raise ValueError("need a nur")
+        elif self.dlnnudr is None:
+            pass # this is fine - Iz0 will just be assumed to be zero
         else:
             self.initialize_deltapsi()
             assert not self.dlnnudr is None
@@ -740,12 +742,18 @@ class potential_container:
 
     def ddr(self, r, Iz0=0):
         ret = self.potential.ddr(r) + Iz0 * 0.5/(r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r)) 
+        if not self.dlnnudr is None:
+            ret = ret + Iz0 * 0.5/(r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r)) 
         return ret
     def ddr2(self, r, Iz0=0):
-        ret = self.potential.ddr2(r) + Iz0/(2.0*r*r*self.nur(r)) * ( (-2.0/r - self.dlnnudr(r)) * (r*self.potential.ddr2(r) - self.potential.ddr(r)) + (r*self.potential.ddr3(r)  ) )
+        ret = self.potential.ddr2(r) 
+        if not self.dlnnudr is None:
+            ret = ret + Iz0/(2.0*r*r*self.nur(r)) * ( (-2.0/r - self.dlnnudr(r)) * (r*self.potential.ddr2(r) - self.potential.ddr(r)) + (r*self.potential.ddr3(r)  ) )
         return ret
     def __call__(self, r, Iz0=0):
-        ret = self.potential(r) + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
+        ret = self.potential(r)
+        if not self.dlnnudr is None:
+            ret = ret + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
         return ret
     def vc(self, r, Iz0=0):
         ret = np.sqrt( - r* self.ddr(r, Iz0) )
@@ -756,8 +764,10 @@ class potential_container:
         beta = (r/self.vc(r,Iz0=Iz0)) * (self.ddr(r,Iz0=Iz0) + r*self.ddr2(r,Iz0=Iz0))
         return np.sqrt(2*(beta+1))
     def nu(self, r, Iz0=0):
-        ret = np.sqrt( self.nur(r)**2 -  Iz0 /(2*r*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))  )
-        return ret
+        retsq =  self.nur(r)**2 -  Iz0 /(2*r*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))  
+        if not self.dlnnudr is None:
+            retsq = retsq  -  Iz0 /(2*r*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))   
+        return np.sqrt(retsq)
     def name(self):
         return 'wrapper_'+self.potential.name()
 
@@ -920,7 +930,7 @@ def particle_ivp2(t, y, psir, alpha, nu0 ):
 class particleLB:
     # use orbits from Lynden-Bell 2015.
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
-    def __init__(self, xCartIn, vCartIn, psir, lbpre, ordershape=1, ordertime=1, tcorr=1.0, hcorr=1.0,
+    def __init__(self, xCartIn, vCartIn, psir, lbpre, ordershape=1, ordertime=1, tcorr=1.0, hcorr=1.0, epsfac=1.0,
                  emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
                  tilt=False, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate', Necc=10, spherical=0.75):
         # psir is psi(r), the potential as a function of radius.
@@ -1005,7 +1015,7 @@ class particleLB:
 
         self.h = R * v / hcorr
         self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(
-            R, self.sph*self.IzIC)  # deal with vertical motion separately -- convention is that psi positive
+            R, self.sph*self.IzIC) + (1.0-epsfac)*self.Ez  # deal with vertical motion separately -- convention is that psi positive
 
         #        def extrema( r ):
         #            return 2.0*self.epsilon + 2.0*self.psi(r) - self.h*self.h/(r*r)
@@ -1088,7 +1098,10 @@ class particleLB:
         chi_eval = lbpre.get_chi_arr(nchis)
         #mytfac = self.Ubar ** nuk / (self.h * self.m0 * self.ubar * np.sqrt(1 - self.e * self.e))
         #nufac = nunought * tfac * self.Ubar ** (-self.alpha / (2.0 * self.k)) / self.rnought ** (-self.alpha / 2.0)
-        alpha = - 2*R*self.psi.dlnnudr(R)
+        if self.psi.dlnnudr is None:
+            alpha = 2.2
+        else:
+            alpha = - 2*R*self.psi.dlnnudr(R)
         rnought = R
         nunought = self.psi.nu(R)
         nufac = nunought * tfac * self.Ubar ** (-alpha / (2.0 * self.k)) / rnought ** (alpha / 2.0)
@@ -2148,6 +2161,51 @@ def windowedopp( ts, arr, twind, opp ):
 
 
 
+def particle_in_spherical( xcart0, vcart0, psir, lbpre, tcorr=1.0, epsfac=1.0):
+
+    rpot = psir.potential        
+    nu = psir.nur
+    dlnnudr = psir.dlnnudr
+
+    part0 = particleLB(xcart0, vcart0, psir, lbpre, spherical=1.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac)
+    parts = [part0]
+
+    def to_integrate( r, dummy, z_of_r ):
+        return z_of_r(r)**2/(2.0*r*r) * (r* rpot.ddr2(r) -  rpot.ddr(r))
+
+    for i in range(5):
+        tAtPeri = 0 - parts[-1].tperiIC
+        tAtApo = tAtPeri + parts[-1].Tr/2.0  
+        tEval = np.linspace(tAtPeri, tAtApo, 50)
+        zs = np.zeros(len(tEval))
+        for j,t in enumerate(tEval):
+            z,_ = parts[-1].zvz( t ) # not vectorized probably
+            zs[j] = z
+        rs = parts[-1].rvectorized(tEval)
+        
+        assert np.all( rs[:-1] <= rs[1:] )
+
+        z_of_r = scipy.interpolate.CubicSpline( rs, zs )
+
+        #res = scipy.integrate.solve_ivp(to_integrate, [rs[0],rs[-1]], [0], vectorized=True,
+        #                                rtol=1.0e-1, atol=1.0e-6, t_eval=rs, method='DOP853', args=(z_of_r,))
+
+        integrand = to_integrate(rs, None, z_of_r)
+        integrated = np.cumsum( (integrand[1:]+integrand[:-1])*0.5*(rs[1:]-rs[:-1]) )
+        integrated = np.insert(integrated,0,0)
+
+        psirThis = interpolated_potential( rs, integrated+rpot(rs), rpot )
+        psiWrThis = potential_container( psirThis, nur=nu )
+
+
+        parts.append( particleLB(xcart0, vcart0, psiWrThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac) )
+
+    return parts[-1]
+    #tPeri = t + self.tperiIC # time since reference pericenter. When the input t is 0, we want this to be the same as the tPeri we found in init()
+
+
+
+
 def debug_spherical():
     psirr = hernquistpotential(20000, vcirc=220)
     nu0 = np.sqrt(4*np.pi*G*0.2)
@@ -2163,7 +2221,7 @@ def debug_spherical():
     vCart = np.array([10.0, 230.0, 10.0])
     ordertime=5
     ordershape=14
-    ts = np.linspace( 0, 10000.0, 20000) # 10 Gyr, steps of 0.5 Myr
+    ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr, steps of 10 Myr
     lbpre = lbprecomputer.load('big_10_0300_0010_hernquistpotential_scale20000_mass852664632533p8286_alpha2p2_lbpre.pickle')
 
     Npart = 12
@@ -2193,38 +2251,43 @@ def debug_spherical():
         peri = np.min(rsph)
         apo = np.max(rsph)
 
-        r_eval, deltapsis = compute_psi_perturbations(rsph, zsph, ts, psir, partsph.IzIC, 1.0, 'dbgsph_rdpsi_'+stri+'.png')
-        psis = deltapsis + psirr(r_eval).reshape((1,len(r_eval))) # will this broadcast?
-        psis_sorted = np.sort( psis, axis=0 )
-        psi_of_perc = scipy.interpolate.CubicSpline( np.arange(deltapsis.shape[0])/float(deltapsis.shape[0]-1), psis_sorted, axis=0) 
+#        r_eval, deltapsis = compute_psi_perturbations(rsph, zsph, ts, psir, partsph.IzIC, 1.0, 'dbgsph_rdpsi_'+stri+'.png')
+#        psis = deltapsis + psirr(r_eval).reshape((1,len(r_eval))) # will this broadcast?
+#        to_sort = np.argsort( deltapsis[:,1] )
+#        #psis_sorted = np.sort( psis, axis=0 )
+#        psis_sorted = psis[ to_sort, :]
+#        psi_of_perc = scipy.interpolate.CubicSpline( np.arange(deltapsis.shape[0])/float(deltapsis.shape[0]-1), psis_sorted, axis=0) 
 
 
         def to_min(corrs):
-            perc, tfac = corrs
+            perc, tfac, epsfac = corrs
             #tfac = corrs[0]
-            
+            #tfac=1.0            
             psiThis = interpolated_potential( r_eval, psi_of_perc(perc), psirr )
-            psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=dlnnudr)
+            psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=None)
 
             fac = 1.0
-            part = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=tfac)
+            part = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=tfac, epsfac=epsfac)
             rs = part.rvectorized(ts)
             return np.sum((rs-rsph)*(rs-rsph))
 
             #return (part.peri-peri)**2 + (part.apo-apo)**2
-        res = scipy.optimize.minimize(to_min, [0.9,1.0], bounds=[(0,1),(0.99, 1.01)] )
-        print(res.x[1])
-
-#        res = scipy.optimize.minimize(to_min, [1.0], bounds=[(0.99, 1.01)] )
+#        res = scipy.optimize.minimize(to_min, [0.9,1.0,0.9], bounds=[(0.0,1.0),(0.99, 1.01),(0.0,1.0)] )
+#        print(res.x[0])
+#        print(res.x[1])
+#        print(res.x[2])
+#
+##        res = scipy.optimize.minimize(to_min, [1.0], bounds=[(0.99, 1.01)] )
 #        print(res)
 #        print(res.x)
 
 
         #partopt = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=res.x[0], ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1])
-        psiThis = interpolated_potential( r_eval, psi_of_perc( res.x[0]), psirr )
-        psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=dlnnudr)
-        partopt = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=1.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1])
-            
+        #psiThis = interpolated_potential( r_eval, psi_of_perc( res.x[0]), psirr )
+        #psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=None)
+
+        #partopt = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1], epsfac=res.x[2])
+        partopt =particle_in_spherical( xCartThis, vCartThis, psir, lbpre, tcorr=1.0, epsfac=1.0)
 
         historycyl = np.zeros( (7, len(ts) ) )
         historysph = np.zeros( (7, len(ts) ) )
@@ -2250,7 +2313,8 @@ def debug_spherical():
             # now initialize a particle with the spherical solution to check which thing in tfac is actually changing and by how much
             partcylThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=False, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
             partsphThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=True, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
-            partoptThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psiContainerThis, lbpre, spherical=res.x[1], ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+            #partoptThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], partopt.psi , lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+            partoptThis = particle_in_spherical( gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre )
 
             history_integrated[:, 0, i] = [partcylThis.h, partsphThis.h, partoptThis.h]
             history_integrated[:, 1, i] = [partcylThis.X, partsphThis.X, partoptThis.X]
@@ -2299,7 +2363,7 @@ def debug_spherical():
                 ax[j].set_xlim(0, 500)
         ax[0].legend()
         ax[9].axhline(partopt.tfac, c='mediumpurple') # "corrected" with the optimization procedure
-        ax[9].axhline(partopt.tfac*res.x[1], c='mediumpurple', ls='--') # what tfac would be without the correction.
+        #ax[9].axhline(partopt.tfac*res.x[1], c='mediumpurple', ls='--') # what tfac would be without the correction.
         plt.tight_layout()
         plt.savefig('dbgsph_rconsts_'+stri+'.png', dpi=300)
         plt.close(fig)
