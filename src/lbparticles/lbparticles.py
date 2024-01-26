@@ -1064,8 +1064,12 @@ class Precomputer:
         shape_order=100,
         e_target=0.08,
         nchis=1000,
-        nks=100,
+        Nclusters=100,
+        Necc=10,
+        Ninterp=1000,
+        Nnuk=5,
         alpha=2.2,
+        logodds_initialized=False,
         vwidth=20,
         R=8100.0,
         eps=1.0e-8,
@@ -1077,7 +1081,7 @@ class Precomputer:
         self.psir = psir
         self.e_target = e_target
         self.nchis = nchis
-        self.N = nks
+        self.Nclusters = Nclusters
         self.alpha = alpha
         self.vwidth = vwidth
         self.R = R
@@ -1086,8 +1090,13 @@ class Precomputer:
         self.vc = self.psir.vc(R)
         self.ks = np.zeros(self.N)
         self.es = np.zeros(self.N)
+        self.Ninterp = Ninterp
+        self.Nnuk = Nnuk
+        self.Necc = Necc
+        self.logodds_initialized = logodds_initialized
         self.Warrs = None
         self.shape_zeros = None
+        self.ek_logodds = None
         self.identifier = (
             f"big_{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
         )
@@ -1101,8 +1110,8 @@ class Precomputer:
         self.interpolators, self.interpolators_nuphase = self.generate_interpolators()
 
     def _init_first_pass(self):
-        vs = np.linspace(self.vc / 10, self.vc * 2, self.N)
-        for i in range(self.N):
+        vs = np.linspace(self.vc / 10, self.vc * 2, self.Ninterp)
+        for i in range(self.Ninterp):
             x_cart = [self.R, 0, 0]
             v_cart = [1.0, vs[i], 0]
             particle = Particle(x_cart, v_cart, self.psir, 1.0, None, quickreturn=True)
@@ -1116,7 +1125,7 @@ class Precomputer:
         """
         Complete a second pass on a more useful range of velocities <--> e's <--> k's.
         """
-        vs = np.linspace(v_target - self.vwidth, v_target + self.vwidth, self.N - 22)
+        vs = np.linspace(v_target - self.vwidth, v_target + self.vwidth, self.Ninterp - 22)
         vs = np.concatenate([vs, np.zeros(22) + 1000])
         v_close_ind = np.argmin(np.abs(vs - self.vc))
         v_close = np.abs(vs[v_close_ind] - self.vc)
@@ -1125,161 +1134,89 @@ class Precomputer:
         v_close_ind = np.argmin(np.abs(vs))
         v_close = np.abs(vs[v_close_ind])
         vs[-22:-11] = np.linspace(v_close / 10.0, v_close * 0.9, 11)
-        for i in range(self.N):
+        for i in range(self.Ninterp):
             x_cart = [self.R, 0, 0]
             v_cart = [0.01, vs[i], 0]
             particle = Particle(x_cart, v_cart, self.psir, 1.0, None, quickreturn=True)
             self.es[i] = particle.e
             self.ks[i] = particle.k
 
-        target_data = np.zeros((self.nchis, self.N, self.time_order + 2))
+        valid = np.logical_and(np.isfinite(self.ks), np.isfinite(self.es))
+        vs = vs[valid]
+        self.es = self.es[valid]
+        self.ks = self.ks[valid]
+        # FIXME: This seems pointless?
+        # self.Ninterp = np.sum(valid)
 
-        target_data_nuphase = np.zeros((self.nchis, self.N, self.time_order + 2))
+        self._initialize_e_of_k()
+
+        target_data = np.zeros((self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk))
+
+        target_data_nuphase = np.zeros((self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk))
+
+        self.eclusters = np.linspace(0.05, 0.95, self.Nclusters)
+        self.kclusters = np.zeros(self.Nclusters)
+        for i, e in enumerate(self.eclusters):
+            # find the closest k.
+            ii = np.argmin(np.abs(self.es - e))
+            self.kclusters[i] = self.ks[ii]
+        self.nukclusters = 2.0 / self.kclusters - 1.0
+        self.mukclusters = self.nukclusters - self.alpha / (2.0 * self.kclusters)
 
         chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
-        for j in range(self.N):
-            nuk = 2.0 / self.ks[j] - 1.0
+        for j in range(self.Nclusters):
             for i in range(self.time_order + 2):
-
-                def to_integrate(chi, val):
-                    return (1.0 - self.es[j] * np.cos(chi)) ** nuk * np.cos(i * chi)
-
-                res = scipy.integrate.solve_ivp(
-                    to_integrate,
-                    [0, 2.0 * np.pi + 0.001],
-                    [0],
-                    vectorized=True,
-                    rtol=1.0e-13,
-                    atol=1.0e-14,
-                    t_eval=chi_eval,
-                )
-                assert np.all(np.isclose(res.t, chi_eval))
-                target_data[:, j, i] = res.y.flatten()
-
-                def to_integrate(chi, val):
-                    return (1.0 - self.es[j] * np.cos(chi)) ** (
-                        nuk - self.alpha / (2.0 * self.ks[j])
-                    ) * np.cos(i * chi)
-
-                res = scipy.integrate.solve_ivp(
-                    to_integrate,
-                    [0, 2.0 * np.pi + 0.001],
-                    [0],
-                    vectorized=True,
-                    rtol=1.0e-13,
-                    atol=1.0e-14,
-                    t_eval=chi_eval,
-                )
-                target_data_nuphase[:, j, i] = res.y.flatten()
+                for jj in range(self.Necc):
+                    for m in range(self.Nnuk):
+                        # t_terms.append(res.y.flatten())
+                        y0, y1 = self.evaluate_integrals(self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m)
+                        self.target_data[:, j, jj, i, m] = y0
+                        self.target_data_nuphase[:, j, jj, i, m] = y1
 
         return target_data, target_data_nuphase, chi_eval
 
-    def generate_interpolators(self):
-        sort_e = np.argsort(self.es)
-        sorted_e = self.es[sort_e]
-        interpolators = np.zeros((self.time_order + 2, self.nchis), dtype=object)
-        interpolators_nuphase = np.zeros(
-            (self.time_order + 2, self.nchis), dtype=object
-        )
-        for i in range(self.time_order + 2):
-            for k in range(self.nchis):
-                interpolators[i, k] = scipy.interpolate.CubicSpline(
-                    sorted_e, self.target_data[k, sort_e, i]
-                )
+    def evaluate_integrals(self, chis, jj, kIn, eIn, n, m):
+        nuk = 2.0 / kIn - 1.0
+        muk = 2.0 / kIn - 1.0 - self.alpha / (2.0 * kIn)
+        deltapsi = scipy.special.polygamma(0, nuk + 1) - scipy.special.polygamma(0, nuk + 1 - jj)
 
-                interpolators_nuphase[i, k] = scipy.interpolate.CubicSpline(
-                    sorted_e, self.target_data_nuphase[k, sort_e, i]
-                )
-        return interpolators, interpolators_nuphase
+        def to_integrate(chi, val):
+            return (1.0 - eIn * np.cos(chi)) ** (nuk - jj) * np.cos(chi) ** jj * np.cos(n * chi) * (
+                        deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
 
-    def add_new_data(self, nnew):
-        N_start = len(self.es)
+        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi], [0], vectorized=True,
+                                        rtol=1.0e-14, atol=1.0e-14, t_eval=chis, method='DOP853')
 
-        new_es = sorted(np.random.beta(0.9, 2.0, size=nnew))
-        new_ks = [self.get_k_given_e(new_es[i]) for i in range(nnew)]
+        assert np.all(np.isclose(res.t, self.chi_eval))
+        y0 = res.y.flatten()
 
-        self.ks = np.concatenate((self.ks, new_ks))
-        self.es = np.concatenate((self.es, new_es))
-        news_shape = np.array(self.target_data.shape)
-        news_shape[1] = nnew
-        assert news_shape[0] == self.nchis
-        assert news_shape[2] == self.time_order + 2
+        deltapsi = scipy.special.polygamma(0, muk + 1) - scipy.special.polygamma(0, muk + 1 - jj)
 
-        self.target_data = np.concatenate(
-            (self.target_data, np.zeros(news_shape)), axis=1
-        )
-        self.target_data_nuphase = np.concatenate(
-            (self.target_data_nuphase, np.zeros(news_shape)), axis=1
-        )
+        def to_integrate(chi, val):
+            return (1.0 - eIn * np.cos(chi)) ** (nuk - jj - self.alpha / (2.0 * kIn)) * np.cos(n * chi) * np.cos(
+                chi) ** jj * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
 
-        for j in range(N_start, self.N + nnew):
-            nuk = 2.0 / self.ks[j] - 1.0
-            for i in range(self.time_order + 2):
+        res = scipy.integrate.solve_ivp(to_integrate, [0, 2.0 * np.pi], [0], vectorized=True,
+                                        rtol=1.0e-14, atol=1.0e-14, t_eval=chis, method='DOP853')
+        y1 = res.y.flatten()
 
-                def to_integrate(chi, val):
-                    return (1.0 - self.es[j] * np.cos(chi)) ** nuk * np.cos(i * chi)
+        return y0, y1
 
-                res = scipy.integrate.solve_ivp(
-                    to_integrate,
-                    [0, 2.0 * np.pi + 0.001],
-                    [0],
-                    vectorized=True,
-                    rtol=1.0e-13,
-                    atol=1.0e-14,
-                    t_eval=self.chi_eval,
-                )
-                assert np.all(np.isclose(res.t, self.chi_eval))
-                self.target_data[:, j, i] = res.y.flatten()
 
-                def to_integrate(chi, val):
-                    return (1.0 - self.es[j] * np.cos(chi)) ** (
-                        nuk - self.alpha / (2.0 * self.ks[j])
-                    ) * np.cos(i * chi)
+    def e_of_k(self, k):
+        """ The object's internal map between k and e0. """
+        return 1.0 / (1.0 + np.exp(self.ek_logodds(k)))
 
-                res = scipy.integrate.solve_ivp(
-                    to_integrate,
-                    [0, 2.0 * np.pi + 0.001],
-                    [0],
-                    vectorized=True,
-                    rtol=1.0e-13,
-                    atol=1.0e-14,
-                    t_eval=self.chi_eval,
-                )
-                assert np.all(np.isclose(res.t, self.chi_eval))
-                self.target_data_nuphase[:, j, i] = res.y.flatten()
-
-        self.N = self.N + nnew
-        self.generate_interpolators()
-
-    def get_k_given_e(self, ein):
-        x_cart0 = [8100.0, 0, 0]
-        v_cart0 = [0.0003, 220, 0]
-
-        def to_zero(vin):
-            vCart = v_cart0[:]
-            vCart[1] = vin
-            xCart = x_cart0[:]
-            particle = Particle(xCart, vCart, self.psir, 1.0, None, quickreturn=True)
-            return particle.e - ein
-
-        a = 1.0
-        b = 220.0
-        if to_zero(a) * to_zero(b) > 0:
-            # TODO Log instead of print?
-            print("Initial guess for bounds failed - trying fine sampling")
-            trial_x = np.linspace(b - 10, b + 1, 10000)
-            trial_y = np.array([to_zero(trial_x[i]) for i in range(len(trial_x))])
-            switches = trial_y[1:] * trial_y[:-1] < 0
-            if np.any(switches):
-                inds = np.ones(len(trial_x) - 1)[switches]
-                a = trial_x[inds[0]]
-                b = trial_x[inds[0] + 1]
-
-        res = scipy.optimize.brentq(to_zero, a, b, xtol=1.0e-14)
-        v_cart = v_cart0[:]
-        v_cart[1] = res
-        part = Particle(x_cart0, v_cart, self.psir, 1.0, None, quickreturn=True)
-        return part.k
+    def _initialize_e_of_k(self):
+        if self.logodds_initialized:
+            raise Exception(
+                "The e-k relationship has already been initialized and it is trying to be initialized again. This is extremely dangerous because the e-k relationship is baked in to the indexing scheme already.")
+        to_sort_k = np.argsort(self.ks)
+        x = self.ks[to_sort_k]
+        y = np.clip(np.log(1.0 / self.es[to_sort_k] - 1.0), -1.0, 2.5)
+        valid = np.logical_and(np.isfinite(x), np.isfinite(y))
+        self.ek_logodds = scipy.interpolate.InterpolatedUnivariateSpline(x[valid], y[valid], k=1)
+        self.logodds_initialized = True
 
     def invert(self, order_shape):
         if self.Warrs is not None and self.shape_zeros is not None:
