@@ -1149,13 +1149,9 @@ class Precomputer:
 
         self._initialize_e_of_k()
 
-        target_data = np.zeros(
-            (self.nchis, self.Nclusters, self.time_order + 2, self.Necc, self.Nnuk)
-        )
+        target_data = np.array()
 
-        target_data_nuphase = np.zeros(
-            (self.nchis, self.Nclusters, self.time_order + 2, self.Necc, self.Nnuk)
-        )
+        target_data_nuphase = np.array()
 
         self.eclusters = np.linspace(0.05, 0.95, self.Nclusters)
         self.kclusters = np.zeros(self.Nclusters)
@@ -1226,6 +1222,8 @@ class Precomputer:
         while not queue2.empty():
             np.append(target_data_nuphase, queue2.get())
 
+        target_data = np.sort(target_data, axis=1)
+        target_data_nuphase = np.sort(target_data_nuphase, axis=1)
         return target_data, target_data_nuphase
 
     def evaluate_integrals(self, chis, jj, kIn, eIn, n, m):
