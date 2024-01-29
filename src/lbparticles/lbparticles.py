@@ -69,7 +69,7 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha, chi_eval):
     return y0, y1
 
 
-def eval_proc(chi_eval, kclusters, eclusters, alpha, a, queue1):
+def eval_proc(chi_eval, kclusters, eclusters, alpha, a, queue):
     res_data = []
     res_data_nu = []
     for i in a:
@@ -86,7 +86,7 @@ def eval_proc(chi_eval, kclusters, eclusters, alpha, a, queue1):
         res_data.append(y0)
         res_data_nu.append(y1)
 
-    queue1.put(res_data, res_data_nu, a)
+    queue.put((res_data, res_data_nu, a))
 
 
 @dataclass(frozen=True)
@@ -1227,11 +1227,11 @@ class Precomputer:
         self._initialize_e_of_k()
 
         target_data = np.zeros(
-            (self.nchis, self.Nclusters, self.Necc, self.timeorder + 2, self.Nnuk)
+            (self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk)
         )
 
         target_data_nuphase = np.zeros(
-            (self.nchis, self.Nclusters, self.Necc, self.timeorder + 2, self.Nnuk)
+            (self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk)
         )
 
         self.eclusters = np.linspace(0.05, 0.95, self.Nclusters)
@@ -1269,23 +1269,22 @@ class Precomputer:
                     self.kclusters,
                     self.eclusters,
                     self.alpha,
-                    pass_data,
+                    [*pass_data],
                     queue,
                 ),
             )
             processes.append(process)
             process.start()
-
-        while len(target_data) < proc_count and len(target_data_nuphase) < proc_count:
+        c = []
+        while len(c) < proc_count and len(c) < proc_count:
             x1, x2, a = queue.get()
             for b, i in enumerate(a):
-                target_data[:, i] = x1[b]
-                target_data_nuphase[:, i] = x2[b]
+                target_data[:, i[0], i[1], i[2], i[3]] = x1[b]
+                target_data_nuphase[:, i[0], i[1], i[2], i[3]] = x2[b]
+            c.append(a)
 
         for process in processes:
             process.join()
-
-        # FIXME: Results could come back in arbitrary order, probably want to sort things?
 
         return target_data, target_data_nuphase
 
