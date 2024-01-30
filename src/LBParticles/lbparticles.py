@@ -737,7 +737,7 @@ class potential_container:
     def Omega(self, r, Iz0=0): 
         return self.vc(r,Iz0=Iz0)/r
 
-    def kappa(self,r, Iz=0):
+    def kappa(self,r, Iz0=0):
         return self.Omega(r,Iz0=Iz0)*self.gamma(r)
 
     def ddr(self, r, Iz0=0):
@@ -764,7 +764,7 @@ class potential_container:
         beta = (r/self.vc(r,Iz0=Iz0)) * (self.ddr(r,Iz0=Iz0) + r*self.ddr2(r,Iz0=Iz0))
         return np.sqrt(2*(beta+1))
     def nu(self, r, Iz0=0):
-        retsq =  self.nur(r)**2 -  Iz0 /(2*r*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))  
+        retsq =  self.nur(r)**2 
         if not self.dlnnudr is None:
             retsq = retsq  -  Iz0 /(2*r*r*r*self.nur(r)) * (r* self.potential.ddr2(r) -  self.potential.ddr(r))   
         return np.sqrt(retsq)
@@ -932,7 +932,7 @@ class particleLB:
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
     def __init__(self, xCartIn, vCartIn, psir, lbpre, ordershape=1, ordertime=1, tcorr=1.0, hcorr=1.0, epsfac=1.0,
                  emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
-                 tilt=False, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate', Necc=10, spherical=0.75):
+                 tilt=False, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate', Necc=10, spherical=False):
         # psir is psi(r), the potential as a function of radius.
         # don't understand things well enough yet, but let's start writing in some of the basic equations
 
@@ -1071,6 +1071,7 @@ class particleLB:
         #if not np.isfinite(self.cRp):
 
         self.k = np.log((-self.cRa - 1) / (self.cRp + 1)) / np.log(self.X)
+        assert self.k>0
 
         self.m0sq = 2 * self.k * (1.0 + self.cRp) / (1.0 - self.X ** -self.k) / (emcorr ** 2)
         self.m0 = np.sqrt(self.m0sq)
@@ -1104,7 +1105,7 @@ class particleLB:
             alpha = - 2*R*self.psi.dlnnudr(R)
         rnought = R
         nunought = self.psi.nu(R)
-        nufac = nunought * tfac * self.Ubar ** (-alpha / (2.0 * self.k)) / rnought ** (alpha / 2.0)
+        nufac = nunought * tfac * self.Ubar ** (-alpha / (2.0 * self.k)) * rnought ** (alpha / (2.0))
         if self.ordertime>=0:
             timezeroes = coszeros(self.ordertime)
             wt_arr = np.zeros((self.ordertime, self.ordertime))
@@ -1142,7 +1143,7 @@ class particleLB:
             # tee needs to be multiplied by l^2/(h*m0*(1-e^2)^(nu+1/2)) before it's in units of time.
 
             t_terms, nu_terms = lbpre.get_t_terms(self.k, self.e, maxorder=self.ordertime+2, \
-                    includeNu=(zopt=='first' or zopt=='zero'), nchis=nchis, Necc=self.Necc )
+                    includeNu=(True or zopt=='first' or zopt=='zero'), nchis=nchis, Necc=self.Necc )
             if profile:
                 tim.tick('Obtain tee terms')
 
@@ -2221,10 +2222,17 @@ def debug_spherical():
     vCart = np.array([10.0, 230.0, 10.0])
     ordertime=5
     ordershape=14
-    ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr, steps of 10 Myr
+    ts = np.linspace( 0, 10000.0, 100) # 10 Gyr, steps of 10 Myr
     lbpre = lbprecomputer.load('big_10_0300_0010_hernquistpotential_scale20000_mass852664632533p8286_alpha2p2_lbpre.pickle')
 
-    Npart = 12
+    Npart = 240
+
+    rmsrs = np.zeros(Npart)
+    zphases = np.zeros(Npart)
+    zphasesTr = np.zeros(Npart)
+    IzICs = np.zeros(Npart)
+
+    
     for ii in tqdm(range(Npart)):
         stri = str(ii).zfill(3)
 
@@ -2287,7 +2295,12 @@ def debug_spherical():
         #psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=None)
 
         #partopt = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1], epsfac=res.x[2])
-        partopt =particle_in_spherical( xCartThis, vCartThis, psir, lbpre, tcorr=1.0, epsfac=1.0)
+        partopt = particle_in_spherical( xCartThis, vCartThis, psir, lbpre, tcorr=1.0, epsfac=1.0)
+        tAtPeri = 0 - partopt.tperiIC
+        z,vz = partopt.zvz(tAtPeri)
+        zphases[ii] = np.arctan2( z*partopt.nu(tAtPeri), vz)
+        zphasesTr[ii] = partopt.phase_per_Tr 
+        IzICs[ii] = partopt.IzIC
 
         historycyl = np.zeros( (7, len(ts) ) )
         historysph = np.zeros( (7, len(ts) ) )
@@ -2327,6 +2340,11 @@ def debug_spherical():
             history_integrated[:, 8, i] = [partcylThis.ell, partsphThis.ell, partoptThis.ell]
             history_integrated[:, 9, i] = [partcylThis.tfac, partsphThis.tfac, partoptThis.tfac]
                 
+
+
+        
+        rmsrs[ii] = rms( historyopt[0,-20:] - rsph[-20:]  )
+
 
         print('empirical peri and apo for sph potential: ', np.min(rsph), np.max(rsph))
         print('empirical peri and apo for cyl potential: ', np.min(rcyl), np.max(rcyl))
@@ -2483,7 +2501,37 @@ def debug_spherical():
         plt.savefig('dbgsph_raccel_'+stri+'.png', dpi=300)
         plt.close(fig)
 
+    fig,ax = plt.subplots()
+    sc = ax.scatter( zphases, rmsrs, c=zphasesTr )
+    plt.colorbar(sc)
+    ax.set_yscale('log')
+    ax.set_ylabel('rerr (pc)')
+    plt.savefig('dbgsph_zphase.png', dpi=300)
+    plt.close(fig)
 
+    fig,ax = plt.subplots()
+    sc = ax.scatter( zphasesTr, zphases, c=np.log10(rmsrs))
+    plt.colorbar(sc)
+    #ax.set_yscale('log')
+    #ax.set_ylabel('rerr (pc)')
+    ax.set_xlabel('$\phi_{T_r}$ (rad)')
+    ax.set_ylabel('$\psi_\mathrm{apo}$ (rad)')
+    for i in range( int(np.min(zphasesTr)/np.pi),int(np.max(zphasesTr)/np.pi)+1 ):
+        ax.axvline(np.pi*i)
+    plt.savefig('dbgsph_zphasetr.png', dpi=300)
+    plt.close(fig)
+
+    fig,ax = plt.subplots()
+    sc = ax.scatter( zphasesTr, IzICs, c=np.log10(rmsrs))
+    plt.colorbar(sc)
+    #ax.set_yscale('log')
+    #ax.set_ylabel('rerr (pc)')
+    ax.set_xlabel('$\phi_{T_r}$ (rad)')
+    ax.set_ylabel('IzIC')
+    for i in range( int(np.min(zphasesTr)/np.pi),int(np.max(zphasesTr)/np.pi)+1 ):
+        ax.axvline(np.pi*i)
+    plt.savefig('dbgsph_zphaseizic.png', dpi=300)
+    plt.close(fig)
 
 
 def benchmark():
