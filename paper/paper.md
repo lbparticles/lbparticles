@@ -49,12 +49,14 @@ The lbparticles is designed for interstellar object research...
 # Classes
 
 How do the classes of the lbparticles operate?
+## Potential
+Uses [@Fiore:2022]
 
-## precomputer
+## Precomputer
 
-## particle
+## Particle
 
-Vertical Options for Z-motion.
+The Particle class has multiple different vertical options for z-motion. These methods are called 2Int, Fourier, Volterra (Zeroth and First), and Tilt.
 
 ### 2Int
 
@@ -62,11 +64,9 @@ Vertical Options for Z-motion.
 
 ### Volterra
 
+Zeroth and First.
+
 ### Tilt
-
-Uses [@Fiore:2022]
-
-## Potential
 
 # Design Principles
 
@@ -79,6 +79,7 @@ The lbparticles package is supported by the University of Canterbury interstella
 # Acknowledgments
 
 Rutherford Discovery Fellowships
+
 University of Canterbury Scholarships
 
 # References
