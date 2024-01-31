@@ -33,6 +33,7 @@ The `lbparticles` python package is a tool to model semianalytic orbits of point
 The lbparticles package allows for the investigation into population dynamics of interstellar objects.
 
 Are there similar projects in the past? Is this competely new application?
+[Bovy:2015]
 
 This paper describes the lbparticles package, the available classes, and the underlying architecture.
 
