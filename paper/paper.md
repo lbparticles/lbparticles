@@ -48,13 +48,15 @@ The lbparticles is designed for interstellar object research...
 
 # Classes
 
-How do the classes of the lbparticles operate?
-## Potential
+`lbparticles` has three main Classes in its implementation; `Potential`, `Precomputer`, and `Particle`.
+
+
+## `Potential`
 Uses [@Fiore:2022]
 
-## Precomputer
+## `Precomputer`
 
-## Particle
+## `Particle`
 
 The Particle class has multiple different vertical options for z-motion. These methods are called 2Int, Fourier, Volterra (Zeroth and First), and Tilt.
 
