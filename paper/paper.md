@@ -1,5 +1,5 @@
 ---
-title: "lbparticles: Semi-analytic particle model Python Package"
+title: "lbparticles: Semi-analytic Particle Model Python Package"
 tags:
   - Python
   - astronomy
@@ -34,15 +34,15 @@ The lbparticles package allows for the investigation into population dynamics of
 
 Are there similar projects in the past? Is this competely new application?
 The main benefit of the package compared to using off the shelf integration is the speed of calculation as well as conserving important quantities that may enable 
-[@Bovy:2015] [@Virtanen:2020][@Diemer:2017]
+[@Bovy:2015] [@Virtanen:2020] [@Diemer:2017]
 
 This paper describes the lbparticles package, the available classes, and the underlying architecture.
 
 # Statement of Intent - lbparticles Package
 
-The lbparticles is a python package that can calculate semianalytic orbits can be easily integrated into a python project with a small footprint; only depending on numpy [@Harris:2020] and scipy [@Virtanen:2020].
+The lbparticles is a python package that can calculate semianalytic orbits can be easily integrated into a python project with a small footprint; only depending on `numpy` [@Harris:2020] and `scipy` [@Virtanen:2020].
 
-Example code can be found @ ...
+Example code can be found on the (readthedocs)[https://lbparticles.readthedocs.io/en/latest/] page in the form of embedded jupyter notebooks [@Kluyver:2016].  ...
 
 The lbparticles is designed for interstellar object research...
 
@@ -54,7 +54,7 @@ How do the classes of the lbparticles operate?
 
 ## particle
 
-Zopt:
+Vertical Options for Z-motion.
 
 ### 2Int
 
