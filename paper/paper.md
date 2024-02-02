@@ -52,9 +52,14 @@ The lbparticles is designed for interstellar object research...
 
 
 ## `Potential`
+
+The Potential class is where the user defines the static central potential. The user gives the explicit function, explicit first derivative, and explicit second derivative in the given class methods,`__call__`, `ddr`, and `ddr2` respectively.
+
 Uses [@Fiore:2022]
 
 ## `Precomputer`
+
+The Precomputer class is where the analytic part of the model is computed. It is initialised with a given Potential and then passed to Particle objects that will move within the potential.
 
 ## `Particle`
 
