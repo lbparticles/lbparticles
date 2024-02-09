@@ -28,6 +28,9 @@ bibliography: paper.bib
 
 # Summary
 
+![lbparticles logo](../logo.png)
+
+
 The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in explicit static central potentials. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to the use of approximate analytical equations derived at initialisation [@Forbes:2024]. The package is a direct descendant of Lynden-Bell's previous work in 2D point mass orbit approximate solutions [@Lynden:2015].
 
 The lbparticles package allows for the investigation into the dynamics of point mass particles. This has been done in the past with integrating methods such as `galpy`, `SPARTA`, and `SciPy` [@Bovy:2015] [@Virtanen:2020] [@Diemer:2017]. The main benefit of `lbparticles` compared to these methods is the speed of calculation and the conservation of important quantities that enables long term analysis of dynamics.
