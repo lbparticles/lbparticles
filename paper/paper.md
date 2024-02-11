@@ -47,7 +47,7 @@ The lbparticles was designed for investigating the dynamics of interstellar obje
 
 # Classes
 
-`lbparticles` has three main Classes in its implementation; `Potential`,`PotentialWrapper`, `Precomputer`, and `Particle`.
+`lbparticles` has four main Classes in its implementation; `Potential`, `PotentialWrapper`, `Precomputer`, and `Particle`.
 
 
 ## `Potential`
@@ -68,14 +68,20 @@ The Particle class has multiple different vertical options for z-motion. These m
 
 ### 2Int
 
+The 2Int vertical motion option numerically integrates the equation of motion for $z$ over a single radial period.
+
 ### Fourier
 
-### Volterra
+The Fourier motion option decomposes $\nu(t)$ into a Fourier series, from which $\mu$ and $f(t)$ may be estimated.
 
-Zeroth and First.
-Uses [@Fiore:2022]
+### Volterra (Zeroth and First Order)
+
+The Volterra motion option uses Fiore's prescription to estimate $z$ based on a series of integrals of the phase of the oscillation with a choice between a zeroth order and a first order approximation [@Fiore:2022].
 
 ### Tilt
+
+John - What is tilt?
+
 
 # Design Principles
 
