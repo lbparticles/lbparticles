@@ -1,5 +1,5 @@
 [project]
-name = "lbparticles"
+name = "LBParticles"
 version = "0.0.3"
 authors = [
     { name = "John Forbes", email = "john.forbes@canterbury.ac.nz" },

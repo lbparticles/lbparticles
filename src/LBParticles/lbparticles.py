@@ -932,7 +932,7 @@ class particleLB:
     # def __init__(self, xCart, vCart, vcirc, vcircBeta, nu):
     def __init__(self, xCartIn, vCartIn, psir, lbpre, ordershape=1, ordertime=1, tcorr=1.0, hcorr=1.0, epsfac=1.0,
                  emcorr=1.0, Vcorr=1.0, wcorrs=None, wtwcorrs=None, debug=False, quickreturn=False, profile=False,
-                 tilt=False, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate', Necc=10, spherical=False):
+                 tilt=False, nchis=300, Nevalz=1000, atolz=1.0e-7, rtolz=1.0e-7, zopt='integrate', Necc=10, spherical=False, spherical2=False):
         # psir is psi(r), the potential as a function of radius.
         # don't understand things well enough yet, but let's start writing in some of the basic equations
 
@@ -1006,16 +1006,22 @@ class particleLB:
         # related quantity:
         # https://arxiv.org/pdf/2205.01781.pdf
         self.IzIC = self.Ez / self.psi.nu(R)
-        self.Ez = 0.5 * (w * w + self.psi.nu(R, self.IzIC*self.sph) ** 2 * z * z)
-        self.IzIC = self.Ez / self.psi.nu(R, Iz0=self.sph*self.IzIC) # one iteration
+        #self.Ez = 0.5 * (w * w + self.psi.nu(R, self.IzIC*self.sph) ** 2 * z * z)
+        #self.IzIC = self.Ez / self.psi.nu(R, Iz0=self.sph*self.IzIC) # one iteration
         self.psiIC = np.arctan2(z * self.psi.nu(R,self.sph*self.IzIC), w)
         # self.phi0 = np.arctan2( -w, z*nu )
 
         # so here's what's going on:
 
         self.h = R * v / hcorr
-        self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(
-            R, self.sph*self.IzIC) + (1.0-epsfac)*self.Ez  # deal with vertical motion separately -- convention is that psi positive
+        if not spherical2:
+            self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(
+                R, self.sph*self.IzIC) + (1.0-epsfac)*self.Ez  # deal with vertical motion separately -- convention is that psi positive
+        # the actual epsilon
+        if spherical2:
+            self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2 + vCart[2]**2) - self.psi(
+                np.sqrt(R*R + z*z)) + 0.5*self.psi.nu(R)**2*z*z  + (1.0-epsfac)*self.Ez  # deal with vertical motion separately -- convention is that psi positive
+
 
         #        def extrema( r ):
         #            return 2.0*self.epsilon + 2.0*self.psi(r) - self.h*self.h/(r*r)
@@ -2168,16 +2174,93 @@ def particle_in_spherical( xcart0, vcart0, psir, lbpre, tcorr=1.0, epsfac=1.0):
     nu = psir.nur
     dlnnudr = psir.dlnnudr
 
+    part0 = particleLB(xcart0, vcart0, psir, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac)
+
+    rs = np.linspace( part0.peri * 0.9, part0.apo * 1.1, 1000) 
+    def sigmoid(x):
+        return 1.0/(1.0+np.exp(-x))
+    rmid = (part0.peri+part0.apo)/2.0
+    rwidth = part0.apo-part0.peri
+    def taper(r):
+        #return 0.25 + 0.25 *sigmoid( -(r-rmid)/(0.3*rwidth) )
+        return 0.5 # *sigmoid( -(r-rmid)/(0.3*rwidth) )
+
+    zmaxs = np.sqrt(2*part0.IzIC/nu(rs))
+    psieff = -part0.IzIC*nu(rs) + rpot( np.sqrt(rs*rs + zmaxs*zmaxs*taper(rs)) )
+
+    psieffThis = interpolated_potential( rs, psieff, rpot )
+    pc = potential_container( psieffThis, nur=nu ) # don't pass dlnnudr so we don't do the integration 
+
+    partRet = particleLB(xcart0, vcart0, pc, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac, spherical2=False)
+
+    #pdb.set_trace()
+    
+    return partRet
+
+
+
+def particle_in_spherical_iter( xcart0, vcart0, psir, lbpre, tcorr=1.0, epsfac=1.0):
+    rpot = psir.potential        
+    nu = psir.nur
+    dlnnudr = psir.dlnnudr
+
+    part0 = particleLB(xcart0, vcart0, psir, lbpre, spherical=1.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac)
+    parts = [part0]
+    print('peri,apo: ',parts[-1].peri, parts[-1].apo )
+
+    def to_integrate( r, dummy, zsq_of_r ):
+        return zsq_of_r(r)/(2.0*r*r) * (r* rpot.ddr2(r) -  rpot.ddr(r))
+
+    for i in range(2):
+        ts = np.linspace( 0, 100*parts[-1].Tr, 10000 )
+        rs = parts[-1].rvectorized(ts)
+        zs = np.array([parts[-1].zvz(t)[0] for t in ts]) # vectorize this if this scheme works
+        zsq = zs*zs
+        # now bin z by r.
+
+        rbinse = np.linspace(parts[-1].peri, parts[-1].apo, 30)
+        rbinsc = 0.5*(rbinse[1:]+rbinse[:-1])
+        zsq_avg = np.zeros(len(rbinsc))
+
+        for j in range(len(rbinsc)):
+            selec = np.logical_and( rbinse[j] < rs, rs<rbinse[j+1]  )
+            zsq_avg[j] = np.mean(zsq[selec])
+
+
+        zsq_of_r = scipy.interpolate.CubicSpline( rbinsc, zsq_avg )
+
+        integrand = to_integrate(rbinsc, None, zsq_of_r)
+        integrated = np.cumsum( (integrand[1:]+integrand[:-1])*0.5*(rbinsc[1:]-rbinsc[:-1]) )
+        integrated = np.insert(integrated,0,0)
+
+        psirThis = interpolated_potential( rbinsc, integrated+rpot(rbinsc), rpot )
+        psiWrThis = potential_container( psirThis, nur=nu )
+
+
+        parts.append( particleLB(xcart0, vcart0, psiWrThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac) )
+        
+        print('peri,apo: ',parts[-1].peri, parts[-1].apo )
+
+    return parts[-1]
+
+
+def particle_in_spherical_iter_integrand( xcart0, vcart0, psir, lbpre, tcorr=1.0, epsfac=1.0):
+
+    rpot = psir.potential        
+    nu = psir.nur
+    dlnnudr = psir.dlnnudr
+
     part0 = particleLB(xcart0, vcart0, psir, lbpre, spherical=1.0, ordertime=6, ordershape=10, zopt='fourier', nchis=100, tcorr=tcorr, epsfac=epsfac)
     parts = [part0]
 
     def to_integrate( r, dummy, z_of_r ):
         return z_of_r(r)**2/(2.0*r*r) * (r* rpot.ddr2(r) -  rpot.ddr(r))
 
-    for i in range(5):
+    for i in range(8):
+        # why the first peri? Why not the nth?
         tAtPeri = 0 - parts[-1].tperiIC
         tAtApo = tAtPeri + parts[-1].Tr/2.0  
-        tEval = np.linspace(tAtPeri, tAtApo, 50)
+        tEval = np.linspace(tAtPeri, tAtApo, 100)
         zs = np.zeros(len(tEval))
         for j,t in enumerate(tEval):
             z,_ = parts[-1].zvz( t ) # not vectorized probably
@@ -2222,16 +2305,22 @@ def debug_spherical():
     vCart = np.array([10.0, 230.0, 10.0])
     ordertime=5
     ordershape=14
-    ts = np.linspace( 0, 10000.0, 100) # 10 Gyr, steps of 10 Myr
+    ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr, steps of 10 Myr
     lbpre = lbprecomputer.load('big_10_0300_0010_hernquistpotential_scale20000_mass852664632533p8286_alpha2p2_lbpre.pickle')
 
-    Npart = 240
+    Npart = 48
 
     rmsrs = np.zeros(Npart)
     zphases = np.zeros(Npart)
     zphasesTr = np.zeros(Npart)
     IzICs = np.zeros(Npart)
 
+    potfacs = np.zeros(Npart)
+    tfacs = np.zeros(Npart)
+    hs = np.zeros(Npart)
+    ks = np.zeros(Npart)
+
+    tcorrests = np.zeros(Npart)
     
     for ii in tqdm(range(Npart)):
         stri = str(ii).zfill(3)
@@ -2250,7 +2339,11 @@ def debug_spherical():
 
 
         partcyl = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=False, ordertime=6, ordershape=10, zopt='integrate', nchis=100)
-        partsph = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=True, ordertime=6, ordershape=10, zopt='integrate', nchis=100)
+        try:
+            partsph = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=0.9, ordertime=6, ordershape=10, zopt='integrate', nchis=100)
+        except:
+            print("Failed to initialize old-style sphericalized particle - using partcyl in its place")
+            partcyl=partsph
 
         rsph = np.sqrt(gtsph.partarray[0,:]**2+gtsph.partarray[1,:]**2)
         rcyl = np.sqrt(gtcyl.partarray[0,:]**2+gtcyl.partarray[1,:]**2)
@@ -2259,6 +2352,10 @@ def debug_spherical():
         peri = np.min(rsph)
         apo = np.max(rsph)
 
+
+
+
+        tcorrests[ii] =  partcyl.Ez/(psir.nu(partcyl.peri))**2 * 1.0/partcyl.peri**2
 #        r_eval, deltapsis = compute_psi_perturbations(rsph, zsph, ts, psir, partsph.IzIC, 1.0, 'dbgsph_rdpsi_'+stri+'.png')
 #        psis = deltapsis + psirr(r_eval).reshape((1,len(r_eval))) # will this broadcast?
 #        to_sort = np.argsort( deltapsis[:,1] )
@@ -2268,39 +2365,49 @@ def debug_spherical():
 
 
         def to_min(corrs):
-            perc, tfac, epsfac = corrs
-            #tfac = corrs[0]
+            #perc, tfac, epsfac = corrs
+            tfac, fac = corrs
             #tfac=1.0            
-            psiThis = interpolated_potential( r_eval, psi_of_perc(perc), psirr )
-            psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=None)
+            #psiThis = interpolated_potential( r_eval, psi_of_perc(perc), psirr )
+            #psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=None)
 
-            fac = 1.0
-            part = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=tfac, epsfac=epsfac)
+            #fac = 1.0
+            epsfac=1.0
+            part = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=fac, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=tfac, epsfac=epsfac)
             rs = part.rvectorized(ts)
             return np.sum((rs-rsph)*(rs-rsph))
 
             #return (part.peri-peri)**2 + (part.apo-apo)**2
-#        res = scipy.optimize.minimize(to_min, [0.9,1.0,0.9], bounds=[(0.0,1.0),(0.99, 1.01),(0.0,1.0)] )
-#        print(res.x[0])
-#        print(res.x[1])
-#        print(res.x[2])
+        res = scipy.optimize.minimize(to_min, [1.00001, 0.8], bounds=[(0.999, 1.001),(0.4, 0.99)] )
+        print(res.x)
+        potfacs[ii] = res.x[1]
+        tfacs[ii] = res.x[0] - 1.0
+        hs[ii] = partcyl.h
+        ks[ii] = partcyl.k
+##        print(res.x[1])
+##        print(res.x[2])
+##
+###        res = scipy.optimize.minimize(to_min, [1.0], bounds=[(0.99, 1.01)] )
+        print(res)
+##        print(res.x)
 #
-##        res = scipy.optimize.minimize(to_min, [1.0], bounds=[(0.99, 1.01)] )
-#        print(res)
-#        print(res.x)
-
-
-        #partopt = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=res.x[0], ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1])
+#
+        #partopt = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=res.x[1], ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[0])
         #psiThis = interpolated_potential( r_eval, psi_of_perc( res.x[0]), psirr )
         #psiContainerThis = potential_container(psiThis,nur=nu,dlnnudr=None)
 
         #partopt = particleLB(xCartThis, vCartThis, psiContainerThis, lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=res.x[1], epsfac=res.x[2])
-        partopt = particle_in_spherical( xCartThis, vCartThis, psir, lbpre, tcorr=1.0, epsfac=1.0)
-        tAtPeri = 0 - partopt.tperiIC
-        z,vz = partopt.zvz(tAtPeri)
-        zphases[ii] = np.arctan2( z*partopt.nu(tAtPeri), vz)
-        zphasesTr[ii] = partopt.phase_per_Tr 
-        IzICs[ii] = partopt.IzIC
+        partopt = particle_in_spherical_iter( xCartThis, vCartThis, psir, lbpre, tcorr=1.0, epsfac=1.0)
+        #partopt = particleLB(xCartThis, vCartThis, psir, lbpre, spherical=0.8, ordertime=6, ordershape=10, zopt='integrate', nchis=100, tcorr=1.0+partcyl.IzIC*1.0e-8, epsfac=1.0)
+        tAtPeri = 0 - partsph.tperiIC
+        z,vz = partsph.zvz(tAtPeri)
+        #zphases[ii] = np.arctan2( z*partopt.nu(tAtPeri), vz)
+        #zphasesTr[ii] = partopt.phase_per_Tr 
+        #IzICs[ii] = partopt.IzIC
+        # use sph version because opt version is borked currently
+        zphases[ii] = np.arctan2( z*partsph.nu(tAtPeri), vz)
+        zphasesTr[ii] = partsph.phase_per_Tr 
+        IzICs[ii] = partsph.IzIC
 
         historycyl = np.zeros( (7, len(ts) ) )
         historysph = np.zeros( (7, len(ts) ) )
@@ -2320,25 +2427,27 @@ def debug_spherical():
 
             r,phi, rdot, vphi = partopt.rphi(t)
             z,vz = partopt.zvz(t)
-            psi = np.arctan2( z*partsph.psi.nu(r,partopt.IzIC*partopt.sph), vz )
+            psi = np.arctan2( z*partopt.psi.nu(r,partopt.IzIC*partopt.sph), vz )
             historyopt[:,i] = [r, phi, rdot, vphi, z,vz, psi]
 
-            # now initialize a particle with the spherical solution to check which thing in tfac is actually changing and by how much
-            partcylThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=False, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
-            partsphThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=True, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
-            #partoptThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], partopt.psi , lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
-            partoptThis = particle_in_spherical( gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre )
+            if False:
+                # now initialize a particle with the spherical solution to check which thing in tfac is actually changing and by how much
+                partcylThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=False, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+                partsphThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre, spherical=True, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+                #partoptThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], partopt.psi , lbpre, spherical=0.0, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True)
+                #partoptThis = particle_in_spherical_iter( gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir, lbpre )
+                partoptThis = particleLB(gtsph.partarray[:3,i], gtsph.partarray[3:,i], psir , lbpre, spherical=0.8, ordertime=6, ordershape=10, zopt='integrate', nchis=100, quickreturn=True, tcorr=1.0+partcylThis.IzIC*1.0e-8)
 
-            history_integrated[:, 0, i] = [partcylThis.h, partsphThis.h, partoptThis.h]
-            history_integrated[:, 1, i] = [partcylThis.X, partsphThis.X, partoptThis.X]
-            history_integrated[:, 2, i] = [partcylThis.k, partsphThis.k, partoptThis.k]
-            history_integrated[:, 3, i] = [partcylThis.m0, partsphThis.m0, partoptThis.m0]
-            history_integrated[:, 4, i] = [partcylThis.peri, partsphThis.peri, partoptThis.peri]
-            history_integrated[:, 5, i] = [partcylThis.apo, partsphThis.apo, partoptThis.apo]
-            history_integrated[:, 6, i] = [partcylThis.e, partsphThis.e, partoptThis.e]
-            history_integrated[:, 7, i] = [partcylThis.epsilon, partsphThis.epsilon, partoptThis.epsilon]
-            history_integrated[:, 8, i] = [partcylThis.ell, partsphThis.ell, partoptThis.ell]
-            history_integrated[:, 9, i] = [partcylThis.tfac, partsphThis.tfac, partoptThis.tfac]
+                history_integrated[:, 0, i] = [partcylThis.h, partsphThis.h, partoptThis.h]
+                history_integrated[:, 1, i] = [partcylThis.X, partsphThis.X, partoptThis.X]
+                history_integrated[:, 2, i] = [partcylThis.k, partsphThis.k, partoptThis.k]
+                history_integrated[:, 3, i] = [partcylThis.m0, partsphThis.m0, partoptThis.m0]
+                history_integrated[:, 4, i] = [partcylThis.peri, partsphThis.peri, partoptThis.peri]
+                history_integrated[:, 5, i] = [partcylThis.apo, partsphThis.apo, partoptThis.apo]
+                history_integrated[:, 6, i] = [partcylThis.e, partsphThis.e, partoptThis.e]
+                history_integrated[:, 7, i] = [partcylThis.epsilon, partsphThis.epsilon, partoptThis.epsilon]
+                history_integrated[:, 8, i] = [partcylThis.ell, partsphThis.ell, partoptThis.ell]
+                history_integrated[:, 9, i] = [partcylThis.tfac, partsphThis.tfac, partoptThis.tfac]
                 
 
 
@@ -2356,9 +2465,24 @@ def debug_spherical():
         # check acceleration
         a_true = particle_ivp3(None, gtsph.partarray, psir, alpha, nu0)
         axy_true = np.sqrt(a_true[3,:]**2 + a_true[4,:]**2)
+        modz = copy.deepcopy(gtsph.partarray)
+        modz[2,:] = historycyl[4,:] # sub in the z history from one of the particles.
+        a_true_modz = particle_ivp3(None, modz, psir, alpha, nu0)
+        axy_true_modz = np.sqrt(a_true_modz[3,:]**2 + a_true_modz[4,:]**2)
         axy0 = psir.ddr( np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) )
         #axyparticular = ax0 + gtsph.partarray[2,:]**2 * 0.5 * gtsph.partarray[0,:] / np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)**3 * (np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) * psir.ddr2(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)) - psir.ddr(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)))
         axyest = psir.ddr(np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), Iz0=partcyl.IzIC)  
+
+        rcyl_sph = np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)
+        rsph_sph = np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2 + gtsph.partarray[2,:]**2) 
+        # use the first-order expansion, but instead of an averaged Fiore 0th order, uses the true value of z.
+        axyest_truez = psir.ddr(rcyl_sph) + 0.5 * gtsph.partarray[2,:]**2/rcyl_sph**2 * ( rcyl_sph * psir.ddr2(rcyl_sph) - psir.ddr(rcyl_sph) )
+        # now take the above one step further and don't use any info from the true simulation, only from the particle.
+        rvecpart = partopt.rvectorized(ts)
+        zvec = np.array([partopt.zvz(ts[iii])[0] for iii in range(len(ts))])
+        axyest_particle = psir.ddr(rvecpart) + 0.5*zvec**2/rvecpart**2 * ( rvecpart*psir.ddr2(rvecpart) - psir.ddr(rvecpart) )
+        # use what should be the exact answer.
+        axyest_sanity = rcyl_sph/rsph_sph * psir.ddr(rsph_sph)
 
 
         ax0 = psir.ddr( np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2) ) * gtsph.partarray[0,:] / np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2)
@@ -2477,15 +2601,28 @@ def debug_spherical():
         fig,ax = plt.subplots()
         #yy = axest - a_true[3,:]
         yy = -axyest - axy_true
+        ymodz = axy_true_modz - axy_true
+        ytruez = -axyest_truez - axy_true
+        ysanity = -axyest_sanity - axy_true
+        ypart = -axyest_particle - axy_true
+
         sc = ax.scatter( np.sqrt(gtsph.partarray[0,:]**2 + gtsph.partarray[1,:]**2), yy, c=ts, alpha=0.3, lw=0, s=4)
         cb = plt.colorbar(sc)
         actual_means = np.zeros(len(rs))
+        actual_means_modz = np.zeros(len(rs))
+        actual_means_truez = np.zeros(len(rs))
+        actual_means_sanity = np.zeros(len(rs))
+        actual_means_part = np.zeros(len(rs))
         actual_means_early = np.zeros(len(rs))
         actual_means_next= np.zeros(len(rs))
         for i,r in enumerate(rs):
             selec = np.logical_and(r-dr < rsph, rsph<r+dr)
             if np.any(selec):
                 actual_means[i] = np.mean( yy[selec] )
+                actual_means_modz[i] = np.mean( ymodz[selec] )
+                actual_means_truez[i] = np.mean( ytruez[selec] )
+                actual_means_sanity[i] = np.mean( ysanity[selec] )
+                actual_means_part[i] = np.mean( ypart[selec] )
             selec2 = np.logical_and(selec, ts<1000.0)
             if np.any(selec2):
                 actual_means_early[i] = np.mean( yy[selec2] )
@@ -2493,8 +2630,12 @@ def debug_spherical():
             if np.any(selec3):
                 actual_means_next[i] = np.mean( yy[selec3] )
         ax.plot(rs,actual_means, c='pink',zorder=1)
-        ax.plot(rs,actual_means_early, c='lightblue',zorder=1)
-        ax.plot(rs,actual_means_next, c='blue',zorder=2)
+        #ax.plot(rs,actual_means_early, c='lightblue',zorder=1)
+        #ax.plot(rs,actual_means_next, c='blue',zorder=2)
+        ax.plot(rs,actual_means_modz, c='purple',zorder=1)
+        ax.plot(rs,actual_means_truez, c='green',zorder=3)
+        #ax.plot(rs,actual_means_sanity, c='red',zorder=4)
+        ax.plot(rs,actual_means_part, c='red',zorder=4)
         ax.set_xlabel('Cylindrical Radius (pc)')
         ax.set_ylabel('Acceleration error (pc/Myr/Myr)')
         plt.tight_layout()
@@ -2503,15 +2644,17 @@ def debug_spherical():
 
     fig,ax = plt.subplots()
     sc = ax.scatter( zphases, rmsrs, c=zphasesTr )
-    plt.colorbar(sc)
+    cbar = plt.colorbar(sc)
     ax.set_yscale('log')
     ax.set_ylabel('rerr (pc)')
+    cbar.set_label(r'$\phi_{T_r}$ (rad)')
     plt.savefig('dbgsph_zphase.png', dpi=300)
     plt.close(fig)
 
     fig,ax = plt.subplots()
     sc = ax.scatter( zphasesTr, zphases, c=np.log10(rmsrs))
-    plt.colorbar(sc)
+    cbar = plt.colorbar(sc)
+    cbar.set_label('log rms r (pc)')
     #ax.set_yscale('log')
     #ax.set_ylabel('rerr (pc)')
     ax.set_xlabel('$\phi_{T_r}$ (rad)')
@@ -2523,7 +2666,8 @@ def debug_spherical():
 
     fig,ax = plt.subplots()
     sc = ax.scatter( zphasesTr, IzICs, c=np.log10(rmsrs))
-    plt.colorbar(sc)
+    cbar = plt.colorbar(sc)
+    cbar.set_label('log rms r (pc)')
     #ax.set_yscale('log')
     #ax.set_ylabel('rerr (pc)')
     ax.set_xlabel('$\phi_{T_r}$ (rad)')
@@ -2532,6 +2676,9 @@ def debug_spherical():
         ax.axvline(np.pi*i)
     plt.savefig('dbgsph_zphaseizic.png', dpi=300)
     plt.close(fig)
+
+    results = np.vstack( (zphases, zphasesTr, IzICs, potfacs, tfacs, tcorrests, rmsrs, hs, ks) ).T
+    np.savetxt('dbgsph_forglue.txt', results, header='# zphases,zphasesTr,IzICs,potfacs,tfacs,tcorrests,rmsrs,hs,ks')
 
 
 def benchmark():
