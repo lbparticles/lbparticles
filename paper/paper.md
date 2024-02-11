@@ -9,7 +9,7 @@ tags:
 authors:
   - name: John C. Forbes
     orcid: 0000-0002-1975-4449
-    equal-contrib: true
+    equal-contrib: false
     affiliation: 1
   - name: Jack Patterson
     orcid: 0009-0001-1692-4676
@@ -31,7 +31,7 @@ bibliography: paper.bib
 ![lbparticles logo](logo.png)
 
 
-The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in explicit static central potentials. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to the use of approximate analytical equations derived at initialisation [@Forbes:2024]. The package is a direct descendant of Lynden-Bell's previous work in 2D point mass orbit approximate solutions [@Lynden:2015].
+The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in explicit static plane central potentials. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to the use of approximate analytical equations derived at initialisation [@Forbes:2024]. The package is a direct descendant of Lynden-Bell's previous work in 2D point mass orbit approximate solutions [@Lynden:2015].
 
 The lbparticles package allows for the investigation into the dynamics of point mass particles. This has been done in the past with integrating methods such as `galpy`, `SPARTA`, and `SciPy` [@Bovy:2015] [@Virtanen:2020] [@Diemer:2017]. The main benefit of `lbparticles` compared to these methods is the speed of calculation and the conservation of important quantities that enables long term analysis of dynamics.
 
@@ -43,18 +43,20 @@ The `lbparticles` is a python package that can calculate orbits of point mass pa
 
 Example code and API Documentation can be found on the [readthedocs](https://lbparticles.readthedocs.io/en/latest/) page in the form of embedded jupyter notebooks and embedded class and function DOCSTRINGs [@Kluyver:2016].
 
-The lbparticles was designed for investigating interstellar objects orbits around the milky way galaxy.
+The lbparticles was designed for investigating the dynamics of interstellar objects orbits around the milky way galaxy.
 
 # Classes
 
-`lbparticles` has three main Classes in its implementation; `Potential`, `Precomputer`, and `Particle`.
+`lbparticles` has three main Classes in its implementation; `Potential`,`PotentialWrapper`, `Precomputer`, and `Particle`.
 
 
 ## `Potential`
 
 The Potential class is where the user defines the static central potential. The user gives the explicit function, explicit first derivative, and explicit second derivative in the given class methods,`__call__`, `ddr`, and `ddr2` respectively.
 
-Uses [@Fiore:2022]
+## `PotentialWrapper`
+
+The PotentialWrapper class provides numerous functions for calculating needed quantities for using the Precomputer class. The PotentialWrapper allows for modulation of the given Potential class (`__call__`, `ddr`, and `ddr2`) through adding terms porportional to the vertical moment of inertia ($I_z$). 
 
 ## `Precomputer`
 
@@ -71,6 +73,7 @@ The Particle class has multiple different vertical options for z-motion. These m
 ### Volterra
 
 Zeroth and First.
+Uses [@Fiore:2022]
 
 ### Tilt
 
