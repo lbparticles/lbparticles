@@ -85,11 +85,11 @@ John - What is tilt?
 
 # Design Principles
 
-We have chosen to construct lbparticles for accessability ...
+We have chosen to construct lbparticles so that it is as accessable as possible to the largest sicentific audience. Hence we have written the package in python as it allows for researchers to interface with the package using python as well as help maintain the code in python [@Rossum:2009]. The main alternative choice we considered was writing the core of lbparticles in rust and using LAPACK for fast and maintainable code base with python bindings for researcher interaction [@Matsakis:2014] [@Anderson:1992]. We went with keeping lbparticles solely in python for ease of maintaining with all current contributors.
 
-This is important for python, because it's a language built with object oriented coding in mind...
+The design and implementation of lbparticles was affected by the choice of python as the main language. This is because python utilises classes heavily, a object oriented paradigm, rather than a functional paradigm. This has lead to a heriarchy of importance in the implementation where a potential needs to be specific for the precomputer to be built and only then can a particle's orbit be determined. This is in contrast to a implementation where particles could be instatiated with their initial conditions and then place inside different potential to determine orbit.
 
-The lbparticles package is supported by the University of Canterbury interstellar objects working group ...
+The lbparticles package is supported by the University of Canterbury interstellar objects working group. For support and advice either reach out using email or the github repo.
 
 # Acknowledgments
 
