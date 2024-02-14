@@ -1,5 +1,5 @@
 ---
-title: "lbparticles: Semi-analytic Particle Model Python Package"
+title: "lbparticles: Test Particle Orbits in Spherical Potentials with Disks"
 tags:
   - Python
   - astronomy
