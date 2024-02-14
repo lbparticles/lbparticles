@@ -31,9 +31,9 @@ bibliography: paper.bib
 ![lbparticles logo](logo.png)
 
 
-The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in explicit static plane central potentials. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to the use of approximate analytical equations derived at initialisation [@Forbes:2024]. The package is a direct descendant of Lynden-Bell's previous work in 2D point mass orbit approximate solutions [@Lynden:2015].
+The `lbparticles` python package is a tool to model semianalytic orbits of point mass particles in explicit static potentials with spherical symmetry but arbitrary radial profiles, with the option of including a disk with an arbitrary surface density profile. The model conserves linear and angular momentum where numerical integration methods would not due to numerical inaccuracies. The model has a faster computation speed than integration methods due to the use of approximate analytical equations derived at initialisation [@Forbes:2024]. The package is a direct descendant of Lynden-Bell's previous work in 2D point mass orbit approximate solutions [@Lynden:2015]; this was developed over multiple papers [@Lynden:2008] [@Lynden:2010] [@Lynden:2015_2].
 
-The lbparticles package allows for the investigation into the dynamics of point mass particles. This has been done in the past with integrating methods such as `galpy`, `SPARTA`, and `SciPy` [@Bovy:2015] [@Virtanen:2020] [@Diemer:2017]. The main benefit of `lbparticles` compared to these methods is the speed of calculation and the conservation of important quantities that enables long term analysis of dynamics.
+The lbparticles package allows for the investigation into the dynamics of point mass particles. This has been done in the past with direct integration of the equations of motion with `galpy`, `SPARTA`, and `SciPy` [@Bovy:2015] [@Diemer:2017] [@Virtanen:2020]. The main benefits of `lbparticles` compared to these methods is calculation time, conservation of quantities, and compactness. The speed of calculation of particles is faster than Scipy which can be seen in the companion paper [@Forbes:2024]. The conservation of important quantities that enables large time scale analysis of dynamics as methods that rely on integration can acrue floating point error in conserved quantities causing them to not be constant. lbparticles is more compact as the solution only requires a 6D position where as in a blind integration you have to store the 6D position of the particle at many different points in time.
 
 This paper describes the `lbparticles` package, the software architecture and its implementation in python. For information on the algorithms used in this package see the sibling paper [@Forbes:2024].
 
@@ -60,7 +60,7 @@ The PotentialWrapper class provides numerous functions for calculating needed qu
 
 ## `Precomputer`
 
-The Precomputer class is where the analytic part of the model is computed. It is initialised with a given Potential and then passed to Particle objects that will move within the potential.
+The Precomputer class is where the analytic part of the model is computed. It is initialised with a given Potential and then passed to Particle objects that will move within the potential. A benefit of the Precomputer class' design is that 
 
 ## `Particle`
 
@@ -72,7 +72,7 @@ The 2Int vertical motion option numerically integrates the equation of motion fo
 
 ### Fourier
 
-The Fourier motion option decomposes $\nu(t)$ into a Fourier series, from which $\mu$ and $f(t)$ may be estimated.
+The Fourier motion option decomposes $\nu(t)$ into a Fourier series, from which $\mu$ and $f(t)$ may be estimated, where $\nu$ is the typical oscillation frequency the vertical motion, $\mu$ is the purely imagninary exponential constant, and $f$ is the function that solves $z = A e^{\mu t}f(t) + Be^{-\mu t}f(-t)$.
 
 ### Volterra (Zeroth and First Order)
 
@@ -80,7 +80,7 @@ The Volterra motion option uses Fiore's prescription to estimate $z$ based on a 
 
 ### Tilt
 
-John - What is tilt?
+The Tilt motion option ignores the disk potential and treats the particle as orbiting in a purely spherically-symmetric potential.
 
 
 # Design Principles
