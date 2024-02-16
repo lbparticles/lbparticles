@@ -22,10 +22,10 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha):
 
     def to_integrate(chi, val):
         return (
-                (1.0 - eIn * np.cos(chi)) ** (nuk - jj)
-                * np.cos(chi) ** jj
-                * np.cos(n * chi)
-                * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
+            (1.0 - eIn * np.cos(chi)) ** (nuk - jj)
+            * np.cos(chi) ** jj
+            * np.cos(n * chi)
+            * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
         )
 
     res = scipy.integrate.solve_ivp(
@@ -48,10 +48,10 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha):
 
     def to_integrate(chi, val):
         return (
-                (1.0 - eIn * np.cos(chi)) ** (nuk - jj - alpha / (2.0 * kIn))
-                * np.cos(n * chi)
-                * np.cos(chi) ** jj
-                * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
+            (1.0 - eIn * np.cos(chi)) ** (nuk - jj - alpha / (2.0 * kIn))
+            * np.cos(n * chi)
+            * np.cos(chi) ** jj
+            * (deltapsi + np.log(1.0 - eIn * np.cos(chi))) ** m
         )
 
     res = scipy.integrate.solve_ivp(
@@ -142,31 +142,31 @@ class VertOptionEnum(Enum):
 
 class Particle:
     def __init__(
-            self,
-            xCartIn,
-            vCartIn,
-            psir,
-            nunought,
-            lbdata: Precomputer | None,
-            rnought=8100.0,
-            ordershape=1,
-            ordertime=1,
-            tcorr=True,
-            emcorr=1.0,
-            Vcorr=1.0,
-            wcorrs=None,
-            wtwcorrs=None,
-            debug=False,
-            quickreturn=False,
-            profile=False,
-            alpha=2.2,
-            adhoc=None,
-            nchis=300,
-            Nevalz=1000,
-            atolz=1.0e-7,
-            rtolz=1.0e-7,
-            zopt=VertOptionEnum.INTEGRATE,
-            Necc=10,
+        self,
+        xCartIn,
+        vCartIn,
+        psir,
+        nunought,
+        lbdata: Precomputer | None,
+        rnought=8100.0,
+        ordershape=1,
+        ordertime=1,
+        tcorr=True,
+        emcorr=1.0,
+        Vcorr=1.0,
+        wcorrs=None,
+        wtwcorrs=None,
+        debug=False,
+        quickreturn=False,
+        profile=False,
+        alpha=2.2,
+        adhoc=None,
+        nchis=300,
+        Nevalz=1000,
+        atolz=1.0e-7,
+        rtolz=1.0e-7,
+        zopt=VertOptionEnum.INTEGRATE,
+        Necc=10,
     ):
         """
         Instantiate a particle
@@ -222,7 +222,7 @@ class Particle:
         v = (x * vy - vx * y) / R
         w = vz
         self.Ez = 0.5 * (
-                w * w + (nunought * (R / self.rnought) ** (-alpha / 2.0)) ** 2 * z * z
+            w * w + (nunought * (R / self.rnought) ** (-alpha / 2.0)) ** 2 * z * z
         )
         self.IzIC = self.Ez / (nunought * (R / self.rnought) ** -(alpha / 2.0))
         self.psiIC = np.arctan2(
@@ -269,25 +269,25 @@ class Particle:
         self.X = self.apo / self.peri
         dr = 0.00001 # TODO not used
         self.cRa = (
-                self.apo * self.apo * self.apo / (self.h * self.h) * self.psi.ddr(self.apo)
+            self.apo * self.apo * self.apo / (self.h * self.h) * self.psi.ddr(self.apo)
         )
         self.cRp = (
-                self.peri
-                * self.peri
-                * self.peri
-                / (self.h * self.h)
-                * self.psi.ddr(self.peri)
+            self.peri
+            * self.peri
+            * self.peri
+            / (self.h * self.h)
+            * self.psi.ddr(self.peri)
         )
 
         self.k = np.log((-self.cRa - 1) / (self.cRp + 1)) / np.log(self.X)
 
         self.m0sq = (
-                2 * self.k * (1.0 + self.cRp) / (1.0 - self.X ** -self.k) / (emcorr ** 2)
+            2 * self.k * (1.0 + self.cRp) / (1.0 - self.X**-self.k) / (emcorr**2)
         )
         self.m0 = np.sqrt(self.m0sq)
 
-        self.perU = self.peri ** -self.k
-        self.apoU = self.apo ** -self.k
+        self.perU = self.peri**-self.k
+        self.apoU = self.apo**-self.k
 
         self.e = (self.perU - self.apoU) / (self.perU + self.apoU)
         if quickreturn:
@@ -302,16 +302,16 @@ class Particle:
 
         nuk = 2.0 / self.k - 1.0
         tfac = (
-                self.ell
-                * self.ell
-                / (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5))
-                / tcorr
+            self.ell
+            * self.ell
+            / (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5))
+            / tcorr
         )
         nufac = (
-                nunought
-                * tfac
-                * self.Ubar ** (-self.alpha / (2.0 * self.k))
-                / self.rnought ** (-self.alpha / 2.0)
+            nunought
+            * tfac
+            * self.Ubar ** (-self.alpha / (2.0 * self.k))
+            / self.rnought ** (-self.alpha / 2.0)
         )
         if self.ordertime >= 0:
             timezeroes = cos_zeros(self.ordertime)
@@ -323,16 +323,16 @@ class Particle:
                 for j in np.arange(1, len(coeffs)):
                     coeffs[j] = np.cos(j * timezeroes[i])
                 wt_arr[i, :] = coeffs[:] * (
-                        self.e * self.e * np.sin(timezeroes[i]) ** 2
+                    self.e * self.e * np.sin(timezeroes[i]) ** 2
                 )
 
                 ui = self.ubar * (
-                        1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i]))
+                    1.0 + self.e * np.cos(self.eta_given_chi(timezeroes[i]))
                 )
                 ui2 = 1.0 / (
-                        0.5
-                        * (1.0 / self.perU + 1.0 / self.apoU)
-                        * (1.0 - self.e * np.cos(timezeroes[i]))
+                    0.5
+                    * (1.0 / self.perU + 1.0 / self.apoU)
+                    * (1.0 - self.e * np.cos(timezeroes[i]))
                 )
                 assert np.isclose(ui, ui2)
                 wtzeroes[i] = np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0
@@ -346,24 +346,27 @@ class Particle:
 
             self.wts_padded = list(self.wts) + list([0, 0, 0, 0])
 
-            t_terms, nu_terms = lbdata.get_t_terms(self.k, self.e, maxorder=self.ordertime + 2,
-                                                   includeNu=(
-                                                               zopt == VertOptionEnum.FIRST or zopt == VertOptionEnum.ZERO),
-                                                   nchis=nchis,
-                                                   Necc=self.Necc)
+            t_terms, nu_terms = lbdata.get_t_terms(
+                self.k,
+                self.e,
+                maxorder=self.ordertime + 2,
+                includeNu=(zopt == VertOptionEnum.FIRST or zopt == VertOptionEnum.ZERO),
+                nchis=nchis,
+                Necc=self.Necc,
+            )
 
             tee = (
-                          1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])
-                  ) * t_terms[0]
+                1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])
+            ) * t_terms[0]
             nuu = (
-                          1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])
-                  ) * nu_terms[0]
+                1.0 + 0.25 * self.e * self.e * (self.wts_padded[0] - self.wts_padded[2])
+            ) * nu_terms[0]
             if self.ordertime > 0:
                 for i in np.arange(1, self.ordertime + 2):
                     prefac = (
-                            -self.wts_padded[i - 2]
-                            + 2 * self.wts_padded[i]
-                            - self.wts_padded[i + 2]
+                        -self.wts_padded[i - 2]
+                        + 2 * self.wts_padded[i]
+                        - self.wts_padded[i + 2]
                     )
                     if i == 1:
                         prefac = self.wts_padded[i] - self.wts_padded[i + 2]
@@ -377,9 +380,9 @@ class Particle:
             if zopt == VertOptionEnum.FIRST:
                 dchi = chi_eval[1] - chi_eval[0]
                 integrands = (
-                        np.sin(chi_eval)
-                        / (1.0 - self.e * np.cos(chi_eval))
-                        * np.cos(2.0 * nuu * nufac)
+                    np.sin(chi_eval)
+                    / (1.0 - self.e * np.cos(chi_eval))
+                    * np.cos(2.0 * nuu * nufac)
                 )
                 to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
                 lefts = integrands[:-1]
@@ -393,9 +396,9 @@ class Particle:
                 )
 
                 integrands = (
-                        np.sin(chi_eval)
-                        / (1.0 - self.e * np.cos(chi_eval))
-                        * np.sin(2.0 * nuu * nufac)
+                    np.sin(chi_eval)
+                    / (1.0 - self.e * np.cos(chi_eval))
+                    * np.sin(2.0 * nuu * nufac)
                 )
                 to_integrate = scipy.interpolate.CubicSpline(chi_eval, integrands)
                 self.sine_integral = np.zeros(len(chi_eval))
@@ -438,7 +441,7 @@ class Particle:
                 [1.0e-6, 2.0 * np.pi + 0.001],
                 [0.0],
                 vectorized=True,
-                rtol=10 ** ordertime,
+                rtol=10**ordertime,
                 atol=1.0e-14,
                 t_eval=chis[1:],
                 method="DOP853",
@@ -454,10 +457,10 @@ class Particle:
         for i in range(self.ordershape):
             ui = self.ubar * (1.0 + self.e * np.cos(shapezeroes[i]))
             Wzeroes[i] = (
-                    (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
-                    * self.ubar
-                    * self.ubar
-                    / ((self.perU - ui) * (ui - self.apoU))
+                (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
+                * self.ubar
+                * self.ubar
+                / ((self.perU - ui) * (ui - self.apoU))
             )
 
         self.Ws = np.dot(W_inv_arr, Wzeroes)
@@ -470,13 +473,13 @@ class Particle:
 
         self.Wpadded = np.array(list(self.Ws) + [0, 0, 0, 0])
 
-        ustar = 2.0 / (self.peri ** self.k + self.apo ** self.k)
+        ustar = 2.0 / (self.peri**self.k + self.apo**self.k)
         self.half_esq_w0 = np.sqrt(self.essq(ustar) / self.ess(ustar)) - 1.0
 
         nulg = 2.0 / self.k - 1.0
         zlg = 1.0 / np.sqrt(1 - self.e * self.e)
         dz = zlg * 1.0e-5
-        etaIC = np.arccos((R ** -self.k / self.ubar - 1.0) / self.e)
+        etaIC = np.arccos((R**-self.k / self.ubar - 1.0) / self.e)
         if u > 0:
             self.etaIC = etaIC
         else:
@@ -486,7 +489,7 @@ class Particle:
 
         self.thetaIC = theta
         chiIC = np.arccos(
-            (1.0 - R ** self.k / (0.5 * (1.0 / self.apoU + 1.0 / self.perU))) / self.e
+            (1.0 - R**self.k / (0.5 * (1.0 / self.apoU + 1.0 / self.perU))) / self.e
         )
         if u > 0:
             self.chiIC = chiIC
@@ -571,7 +574,7 @@ class Particle:
 
     def nu(self, t):
         return self.nunought * (self.rvectorized(t) / self.rnought) ** (
-                -self.alpha / 2.0
+            -self.alpha / 2.0
         )
 
     def Norb(self, t):
@@ -581,40 +584,40 @@ class Particle:
 
     def effcos(self, chi):
         return (
-                -self.alpha
-                * self.e
-                / (2.0 * self.k)
+            -self.alpha
+            * self.e
+            / (2.0 * self.k)
+            * (
+                np.cos(2.0 * self.nu_t_0)
                 * (
-                        np.cos(2.0 * self.nu_t_0)
-                        * (
-                                self.cosine_integral_of_chi(chi)
-                                - self.cosine_integral_of_chi(self.chiIC)
-                        )
-                        - np.sin(2.0 * self.nu_t_0)
-                        * (
-                                self.sine_integral_of_chi(chi)
-                                - self.sine_integral_of_chi(self.chiIC)
-                        )
+                    self.cosine_integral_of_chi(chi)
+                    - self.cosine_integral_of_chi(self.chiIC)
                 )
+                - np.sin(2.0 * self.nu_t_0)
+                * (
+                    self.sine_integral_of_chi(chi)
+                    - self.sine_integral_of_chi(self.chiIC)
+                )
+            )
         )
 
     def effsin(self, chi):
         return (
-                -self.alpha
-                * self.e
-                / (2.0 * self.k)
+            -self.alpha
+            * self.e
+            / (2.0 * self.k)
+            * (
+                np.sin(2.0 * self.nu_t_0)
                 * (
-                        np.sin(2.0 * self.nu_t_0)
-                        * (
-                                self.cosine_integral_of_chi(chi)
-                                - self.cosine_integral_of_chi(self.chiIC)
-                        )
-                        + np.cos(2.0 * self.nu_t_0)
-                        * (
-                                self.sine_integral_of_chi(chi)
-                                - self.sine_integral_of_chi(self.chiIC)
-                        )
+                    self.cosine_integral_of_chi(chi)
+                    - self.cosine_integral_of_chi(self.chiIC)
                 )
+                + np.cos(2.0 * self.nu_t_0)
+                * (
+                    self.sine_integral_of_chi(chi)
+                    - self.sine_integral_of_chi(self.chiIC)
+                )
+            )
         )
 
     def initialize_z_fourier(self, zorder=20):
@@ -631,7 +634,7 @@ class Particle:
         chi = self.chi_given_tperi(tPeri)
         rs = self.r_given_chi(chi)
 
-        nusqs = self.nunought ** 2 * (rs / self.rnought) ** (-self.alpha)
+        nusqs = self.nunought**2 * (rs / self.rnought) ** (-self.alpha)
 
         nusqs = nusqs * (self.Tr / np.pi) ** 2
         thetans = np.linalg.inv(matr) @ nusqs
@@ -801,7 +804,7 @@ class Particle:
         else:
             r, _, _, _ = self.rphi(0)
             self.IzIC = self.Ez / (
-                    self.nunought * (r / self.rnought) ** -(self.alpha / 2.0)
+                self.nunought * (r / self.rnought) ** -(self.alpha / 2.0)
             )
 
         IZ = self.IzIC
@@ -823,21 +826,21 @@ class Particle:
                 sine_integral = self.effsin(chi_excess)
             else:
                 cosine_integral = self.effcos(2 * np.pi) - self.alpha * self.e / (
-                        2.0 * self.k
+                    2.0 * self.k
                 ) * (
-                                          np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
-                                          * self.cosine_integral_of_chi(chi_excess)
-                                          - np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
-                                          * self.sine_integral_of_chi(chi_excess)
-                                  )
+                    np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
+                    * self.cosine_integral_of_chi(chi_excess)
+                    - np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
+                    * self.sine_integral_of_chi(chi_excess)
+                )
                 sine_integral = self.effsin(2 * np.pi) - self.alpha * self.e / (
-                        2.0 * self.k
+                    2.0 * self.k
                 ) * (
-                                        np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
-                                        * self.cosine_integral_of_chi(chi_excess)
-                                        + np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
-                                        * self.sine_integral_of_chi(chi_excess)
-                                )
+                    np.sin(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
+                    * self.cosine_integral_of_chi(chi_excess)
+                    + np.cos(2 * (self.nu_t_0 + Norb * self.phase_per_Tr))
+                    * self.sine_integral_of_chi(chi_excess)
+                )
 
                 if Norb > 1:
                     arrCos = [
@@ -849,22 +852,22 @@ class Particle:
                         for i in range(Norb - 1)
                     ]
                     to_add_cosine = (
-                            -self.alpha
-                            * self.e
-                            / (2.0 * self.k)
-                            * (
-                                    self.cosine_integral_of_chi(2.0 * np.pi) * np.sum(arrCos)
-                                    - self.sine_integral_of_chi(2.0 * np.pi) * np.sum(arrSin)
-                            )
+                        -self.alpha
+                        * self.e
+                        / (2.0 * self.k)
+                        * (
+                            self.cosine_integral_of_chi(2.0 * np.pi) * np.sum(arrCos)
+                            - self.sine_integral_of_chi(2.0 * np.pi) * np.sum(arrSin)
+                        )
                     )
                     to_add_sine = (
-                            -self.alpha
-                            * self.e
-                            / (2.0 * self.k)
-                            * (
-                                    self.sine_integral_of_chi(2.0 * np.pi) * np.sum(arrCos)
-                                    + self.cosine_integral_of_chi(2.0 * np.pi) * np.sum(arrSin)
-                            )
+                        -self.alpha
+                        * self.e
+                        / (2.0 * self.k)
+                        * (
+                            self.sine_integral_of_chi(2.0 * np.pi) * np.sum(arrCos)
+                            + self.cosine_integral_of_chi(2.0 * np.pi) * np.sum(arrSin)
+                        )
                     )
 
                     cosine_integral = cosine_integral + to_add_cosine
@@ -911,10 +914,10 @@ class Particle:
         def to_integrate(etaIn):
             ui = self.ubar * (1.0 + self.e * np.cos(etaIn))
             W = (
-                    (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
-                    * self.ubar
-                    * self.ubar
-                    / ((self.perU - ui) * (ui - self.apoU))
+                (np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0)
+                * self.ubar
+                * self.ubar
+                / ((self.perU - ui) * (ui - self.apoU))
             )
             return 1.0 + self.e * self.e * np.sin(etaIn) * np.sin(etaIn) * W
 
@@ -926,16 +929,16 @@ class Particle:
     def ess(self, u):
         r = u ** (-1.0 / self.k)
         return (
-                (2.0 * self.epsilon + 2.0 * self.psi(r) - self.h * self.h / (r * r))
-                * r
-                * r
-                / (self.h * self.h)
-                * (u * u * self.k * self.k)
+            (2.0 * self.epsilon + 2.0 * self.psi(r) - self.h * self.h / (r * r))
+            * r
+            * r
+            / (self.h * self.h)
+            * (u * u * self.k * self.k)
         )
 
     def t(self, chi):
         return (
-                self.Tr / (2.0 * np.pi) * (chi - (self.V2 / self.V1 * self.e * np.sin(chi)))
+            self.Tr / (2.0 * np.pi) * (chi - (self.V2 / self.V1 * self.e * np.sin(chi)))
         )
 
     def r_given_chi(self, chi):
@@ -1060,9 +1063,9 @@ class PotentialWrapper:
     def initialize_deltapsi(self):
         def to_integrate(r, _):
             return (
-                    1.0
-                    / (r * r * self.nur(r))
-                    * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+                1.0
+                / (2.0*r * r * self.nur)
+                * (r * self.potential.ddr2(r) -  self.potential.ddr(r))
             )
 
         t_eval = np.logspace(-5, np.log10(300) * 0.99999, 1000)
@@ -1090,9 +1093,9 @@ class PotentialWrapper:
             self.potential.ddr(r)
             if Iz0 == 0
             else self.potential.ddr(r)
-                 + Iz0
-                 / (r * r * self.nu(r))
-                 * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+            + Iz0
+            / (r * r * self.nu(r))
+            * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
         )
 
     def ddr2(self, r, Iz0=0):
@@ -1100,13 +1103,13 @@ class PotentialWrapper:
             self.potential.ddr2(r)
             if Iz0 == 0
             else self.potential.ddr2(r)
-                 + Iz0
-                 / (r * r * self.nu(r))
-                 * (
-                         (-2.0 / r - self.dlnnudr(r))
-                         * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
-                         + (r * self.potential.ddr3(r) + 0.5 * self.potential.ddr2(r))
-                 )
+            + Iz0
+            / (r * r * self.nu(r))
+            * (
+                (-2.0 / r - self.dlnnudr(r))
+                * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+                + (r * self.potential.ddr3(r) + 0.5 * self.potential.ddr2(r))
+            )
         )
 
     def vc(self, r, Iz0=0):
@@ -1115,7 +1118,7 @@ class PotentialWrapper:
 
     def gamma(self, r, Iz0=0):
         beta = (r / self.vc(r, Iz0=Iz0)) * (
-                self.ddr(r, Iz0=Iz0) + r * self.ddr2(r, Iz0=Iz0)
+            self.ddr(r, Iz0=Iz0) + r * self.ddr2(r, Iz0=Iz0)
         )
         return np.sqrt(2 * (beta + 1))
 
@@ -1134,22 +1137,22 @@ class PotentialWrapper:
 
 class Precomputer:
     def __init__(
-            self,
-            psir: PotentialWrapper,
-            time_order=10,
-            shape_order=100,
-            e_target=0.08,
-            nchis=1000,
-            Nclusters=10,
-            Necc=10,
-            Ninterp=1000,
-            Nnuk=5,
-            alpha=2.2,
-            logodds_initialized=False,
-            vwidth=50,
-            R=8100.0,
-            eps=1.0e-8, #TODO not used?
-            gravity=0.00449987,
+        self,
+        psir: PotentialWrapper,
+        time_order=10,
+        shape_order=100,
+        e_target=0.08,
+        nchis=1000,
+        Nclusters=10,
+        Necc=10,
+        Ninterp=1000,
+        Nnuk=5,
+        alpha=2.2,
+        logodds_initialized=False,
+        vwidth=50,
+        R=8100.0,
+        eps=1.0e-8,
+        gravity=0.00449987,
     ):
         """DOCSTRING"""
         self.time_order = time_order
@@ -1262,7 +1265,7 @@ class Precomputer:
         a3 = np.arange(self.Necc)
         a4 = np.arange(self.Nnuk)
 
-        proc_count = multiprocessing.cpu_count() - 1
+        proc_count = 1  # multiprocessing.cpu_count() - 1
         num = self.Nclusters * (self.time_order + 2) * self.Necc * self.Nnuk
         ns = [
             num // proc_count + (1 if x < num % proc_count else 0)
@@ -1321,8 +1324,8 @@ class Precomputer:
     def invert(self, order_shape):
         if self.Warrs is not None and self.shape_zeros is not None:
             if (
-                    order_shape in self.Warrs.keys()
-                    and order_shape in self.shape_zeros.keys()
+                order_shape in self.Warrs.keys()
+                and order_shape in self.shape_zeros.keys()
             ):
                 return self.Warrs[order_shape], self.shape_zeros[order_shape]
         shape_zeroes = cos_zeros(order_shape)
@@ -1364,13 +1367,24 @@ class Precomputer:
         inds = self.get_chi_index_arr(N)
         return self.chi_eval[inds]
 
-    def get_t_terms(self, kIn, eIn, Necc=None, nchis=None, includeNu=True, maxorder=None, debug=False):
+    def get_t_terms(
+        self,
+        kIn,
+        eIn,
+        Necc=None,
+        nchis=None,
+        includeNu=True,
+        maxorder=None,
+        debug=False,
+    ):
         if maxorder is None:
             ordermax = self.time_order + 2
         else:
             ordermax = maxorder
         if ordermax > self.time_order + 2:
-            raise Exception("More orders requested than have been pre-computed in lbprecomputer::get_t_terms")
+            raise Exception(
+                "More orders requested than have been pre-computed in lbprecomputer::get_t_terms"
+            )
 
         if nchis is None:
             nchiEval = self.nchis
@@ -1378,7 +1392,8 @@ class Precomputer:
             nchiEval = nchis
         else:
             raise Exception(
-                "More chi evaluation points requested than have been pre-computed in lbprecomputer::get_t_terms")
+                "More chi evaluation points requested than have been pre-computed in lbprecomputer::get_t_terms"
+            )
 
         if Necc is None:
             Neccs = self.Necc
@@ -1386,7 +1401,8 @@ class Precomputer:
             Neccs = Necc
         else:
             raise Exception(
-                "More terms in the eccentricity series requested than have been pre-computed in lbprecomputer::get_t_terms")
+                "More terms in the eccentricity series requested than have been pre-computed in lbprecomputer::get_t_terms"
+            )
 
         nuk = 2.0 / kIn - 1.0
         muk = nuk - self.alpha / (2.0 * kIn)
@@ -1416,33 +1432,55 @@ class Precomputer:
         # to_sum_nuphase = np.transpose(self.target_data_nuphase[chiarr, ii, :, :ordermax, :], (2,1,0,3) )
 
         # orders, eccs, chis, ems, peas, eyes = np.meshgrid( np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk), np.arange(self.Nnuk), np.arange(self.Nnuk), indexing='ij')
-        orders, eccs, chis, ems, peas = np.meshgrid(np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk),
-                                                    np.arange(self.Nnuk), indexing='ij')
+        orders, eccs, chis, ems, peas = np.meshgrid(
+            np.arange(ordermax),
+            np.arange(Neccs),
+            chiarr,
+            np.arange(self.Nnuk),
+            np.arange(self.Nnuk),
+            indexing="ij",
+        )
 
         # all of this can be pre-computed for each cluster
         def AprimeNu(order, j):
-            return (scipy.special.polygamma(order, self.nukclusters[ii] + 1) - scipy.special.polygamma(order,
-                                                                                                       self.nukclusters[
-                                                                                                           ii] + 1 - j))
+            return scipy.special.polygamma(
+                order, self.nukclusters[ii] + 1
+            ) - scipy.special.polygamma(order, self.nukclusters[ii] + 1 - j)
 
         def AprimeMu(order, j):
-            return (scipy.special.polygamma(order, self.mukclusters[ii] + 1) - scipy.special.polygamma(order,
-                                                                                                       self.mukclusters[
-                                                                                                           ii] + 1 - j))
+            return scipy.special.polygamma(
+                order, self.mukclusters[ii] + 1
+            ) - scipy.special.polygamma(order, self.mukclusters[ii] + 1 - j)
 
         # ohkay
         j1d = np.arange(Neccs)
         m1d = np.arange(self.Nnuk)
         p1d = np.arange(self.Nnuk)
-        i1d = np.arange(self.Nnuk)  # these are the same array but for my own sanity I've named them different things.
+        i1d = np.arange(
+            self.Nnuk
+        )  # these are the same array but for my own sanity I've named them different things.
 
-        p2d, i2d = np.meshgrid(p1d, i1d, indexing='ij')
-        p2d_pm, m2d_pm = np.meshgrid(p1d, m1d, indexing='ij')
+        p2d, i2d = np.meshgrid(p1d, i1d, indexing="ij")
+        p2d_pm, m2d_pm = np.meshgrid(p1d, m1d, indexing="ij")
 
-        _, eccs5d, _, ems5d, peas5d = np.meshgrid(np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk),
-                                                  np.arange(self.Nnuk), indexing='ij')
-        _, _, _, ems4d = np.meshgrid(np.arange(ordermax), np.arange(Neccs), chiarr, np.arange(self.Nnuk), indexing='ij')
-        _, eccs3d, _ = np.meshgrid(np.arange(ordermax), np.arange(Neccs), chiarr, indexing='ij')
+        _, eccs5d, _, ems5d, peas5d = np.meshgrid(
+            np.arange(ordermax),
+            np.arange(Neccs),
+            chiarr,
+            np.arange(self.Nnuk),
+            np.arange(self.Nnuk),
+            indexing="ij",
+        )
+        _, _, _, ems4d = np.meshgrid(
+            np.arange(ordermax),
+            np.arange(Neccs),
+            chiarr,
+            np.arange(self.Nnuk),
+            indexing="ij",
+        )
+        _, eccs3d, _ = np.meshgrid(
+            np.arange(ordermax), np.arange(Neccs), chiarr, indexing="ij"
+        )
 
         ap0nu = AprimeNu(0, j1d)
         ap1nu = AprimeNu(1, j1d)
@@ -1474,7 +1512,7 @@ class Precomputer:
             apmjmu[4, 4, :] = 1
 
             apmjmu[0, 5, :] = ap4mu + 10 * ap1mu * ap2mu
-            apmjmu[1, 5, :] = 5 * ap3mu + 15 * ap1mu ** 2
+            apmjmu[1, 5, :] = 5 * ap3mu + 15 * ap1mu**2
             apmjmu[2, 5, :] = 10 * ap2mu
             apmjmu[3, 5, :] = 10 * ap1mu
             apmjmu[5, 5, :] = 1
@@ -1496,7 +1534,7 @@ class Precomputer:
         apmjnu[4, 4, :] = 1
 
         apmjnu[0, 5, :] = ap4nu + 10 * ap1nu * ap2nu
-        apmjnu[1, 5, :] = 5 * ap3nu + 15 * ap1nu ** 2
+        apmjnu[1, 5, :] = 5 * ap3nu + 15 * ap1nu**2
         apmjnu[2, 5, :] = 10 * ap2nu
         apmjnu[3, 5, :] = 10 * ap1nu
         apmjnu[5, 5, :] = 1
@@ -1504,18 +1542,22 @@ class Precomputer:
         kcl = self.kclusters[ii]
 
         # set up some arrays that require a little bit of computation, then we'll expand them via indexing later
-        efac = (-de) ** j1d / scipy.special.factorial(j1d) * scipy.special.gamma(
-            self.nukclusters[ii] + 1) / scipy.special.gamma(self.nukclusters[ii] + 1 - j1d)
-        nukfac = dnuk ** m1d / scipy.special.factorial(m1d)
-        ipfact = (i2d <= p2d).astype(int) / np.clip(scipy.special.factorial(p2d - i2d), 1.0, None)
-        ippower = np.clip(p2d - i2d, 0, None)
-        pmfac = (p2d_pm <= m2d_pm).astype(int)
+        efac = (
+            (-de) ** j1d
+            / scipy.special.factorial(j1d)
+            * scipy.special.gamma(self.nukclusters[ii] + 1)
+            / scipy.special.gamma(self.nukclusters[ii] + 1 - j1d)
+        )
+        nukfac = dnuk**m1d / scipy.special.factorial(m1d)
 
         # this is still kind of expensive because there are a lot of multiplications, i.e. we've expanding the matrix to an enormous size before multiplying (6d)
         # to_sum = efac[eccs] * nukfac[ems] * apmjnu[peas,ems,eccs] * ( pfact[peas] / ifact[eyes] ) * ipfact[peas,eyes]  * pmfac[peas,ems] * ap0nu[eccs]**ippower[peas,eyes] * self.target_data[chis, ii, eccs, orders, eyes]
 
         # to_sum = ( ipfact[peas,eyes] / ifact[eyes] ) *  ap0nu[eccs]**ippower[peas,eyes] * self.target_data[chis, ii, eccs, orders, eyes]
-        to_sum = apmjnu[peas5d, ems5d, eccs5d] * self.target_data[chis, ii, eccs, orders, peas]
+        to_sum = (
+            apmjnu[peas5d, ems5d, eccs5d]
+            * self.target_data[chis, ii, eccs, orders, peas]
+        )
 
         # to_sum_marg1 = np.sum(to_sum, axis=-1) # do the sum over i
         # to_sum_marg2 = np.sum(to_sum_marg1 * pfact[peas5d] * apmjnu[peas5d,ems5d,eccs5d], axis=-1 ) # do the sum over p
@@ -1524,11 +1566,18 @@ class Precomputer:
         res = np.sum(to_sum_marg3 * efac[eccs3d], axis=1)  # sum over j.
 
         if includeNu:
-            efacmu = (-de) ** j1d / scipy.special.factorial(j1d) * scipy.special.gamma(
-                self.mukclusters[ii] + 1) / scipy.special.gamma(self.mukclusters[ii] + 1 - j1d)
-            mukfac = dmuk ** m1d / scipy.special.factorial(m1d)
+            efacmu = (
+                (-de) ** j1d
+                / scipy.special.factorial(j1d)
+                * scipy.special.gamma(self.mukclusters[ii] + 1)
+                / scipy.special.gamma(self.mukclusters[ii] + 1 - j1d)
+            )
+            mukfac = dmuk**m1d / scipy.special.factorial(m1d)
 
-            to_sum = apmjmu[peas5d, ems5d, eccs5d] * self.target_data_nuphase[chis, ii, eccs, orders, peas]
+            to_sum = (
+                apmjmu[peas5d, ems5d, eccs5d]
+                * self.target_data_nuphase[chis, ii, eccs, orders, peas]
+            )
 
             # to_sum_marg1 = np.sum(to_sum, axis=-1) # do the sum over i
             # to_sum_marg2 = np.sum(to_sum_marg1 * pfact[peas5d] * apmjnu[peas5d,ems5d,eccs5d], axis=-1 ) # do the sum over p
