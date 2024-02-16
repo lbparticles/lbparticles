@@ -13,7 +13,7 @@ import multiprocessing
 import itertools as it
 
 
-def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha, chi_eval):
+def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha):
     nuk = 2.0 / kIn - 1.0
     muk = 2.0 / kIn - 1.0 - alpha / (2.0 * kIn)
     deltapsi = scipy.special.polygamma(0, nuk + 1) - scipy.special.polygamma(
@@ -33,13 +33,13 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha, chi_eval):
         [0, 2.0 * np.pi],
         [0],
         vectorized=True,
-        rtol=1.0e-14,
-        atol=1.0e-14,
+        rtol=2.4e-14,
+        atol=1.0e-15,
         t_eval=chis,
         method="DOP853",
     )
 
-    assert np.all(np.isclose(res.t, chi_eval))
+    assert np.all(np.isclose(res.t, chis))
     y0 = res.y.flatten()
 
     deltapsi = scipy.special.polygamma(0, muk + 1) - scipy.special.polygamma(
@@ -59,8 +59,8 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha, chi_eval):
         [0, 2.0 * np.pi],
         [0],
         vectorized=True,
-        rtol=1.0e-14,
-        atol=1.0e-14,
+        rtol=2.4e-14,
+        atol=1.0e-15,
         t_eval=chis,
         method="DOP853",
     )
@@ -81,7 +81,6 @@ def eval_proc(chi_eval, kclusters, eclusters, alpha, a, queue):
             i[1],
             i[3],
             alpha,
-            chi_eval,
         )
         res_data.append(y0)
         res_data_nu.append(y1)
@@ -268,7 +267,7 @@ class Particle:
         self.peri = res_peri.root
         self.apo = res_apo.root
         self.X = self.apo / self.peri
-        dr = 0.00001
+        dr = 0.00001 # TODO not used
         self.cRa = (
                 self.apo * self.apo * self.apo / (self.h * self.h) * self.psi.ddr(self.apo)
         )
@@ -501,7 +500,7 @@ class Particle:
             )
 
         if zopt == VertOptionEnum.FOURIER:
-            self.initialize_z_fourier(40, profile=profile)
+            self.initialize_z_fourier(40) # TODO allow user to adjust this number
 
         if zopt == VertOptionEnum.INTEGRATE:
             self.initialize_z_numerical(rtol=rtolz, atol=atolz, Neval=Nevalz)
@@ -1062,7 +1061,7 @@ class PotentialWrapper:
         def to_integrate(r, _):
             return (
                     1.0
-                    / (r * r * self.nur)
+                    / (r * r * self.nur(r))
                     * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
             )
 
@@ -1123,10 +1122,10 @@ class PotentialWrapper:
     def nu(self, r, Iz0=0):
         # TODO Fix badness of recursive function
         return np.sqrt(
-            self.nu(r) ** 2
-            - Iz0
-            / (r * r * r * self.nu(r))
-            * (r * self.potential.ddr2(r) - 0.5 * self.potential.ddr(r))
+            self.nur(r) ** 2
+            - 0.5*Iz0
+            / (r * r * r * self.nur(r))
+            * (r * self.potential.ddr2(r) -  self.potential.ddr(r))
         )
 
     def name(self) -> str:
@@ -1149,7 +1148,7 @@ class Precomputer:
             logodds_initialized=False,
             vwidth=50,
             R=8100.0,
-            eps=1.0e-8,
+            eps=1.0e-8, #TODO not used?
             gravity=0.00449987,
     ):
         """DOCSTRING"""
@@ -1243,6 +1242,20 @@ class Precomputer:
         self.mukclusters = self.nukclusters - self.alpha / (2.0 * self.kclusters)
 
         self.chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
+
+
+        for j in range(self.Nclusters):
+            for i in range(self.time_order+ 2):
+                for jj in range(self.Necc):
+                    for m in range(self.Nnuk):
+                    # t_terms.append(res.y.flatten())
+                        y0,y1 = evaluate_integrals( self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m, self.alpha )
+                        target_data[:, j, jj, i, m] = y0
+                        target_data_nuphase[:, j, jj, i, m] = y1 
+        return target_data, target_data_nuphase
+        
+        # The following code is not equivalent to the for loops above and is therefore wrong.
+        # Guessing it's a mixup in the indexes, but don't have time to track it down.
 
         a1 = np.arange(self.Nclusters)
         a2 = np.arange(self.time_order + 2)
@@ -1494,8 +1507,6 @@ class Precomputer:
         efac = (-de) ** j1d / scipy.special.factorial(j1d) * scipy.special.gamma(
             self.nukclusters[ii] + 1) / scipy.special.gamma(self.nukclusters[ii] + 1 - j1d)
         nukfac = dnuk ** m1d / scipy.special.factorial(m1d)
-        pfact = scipy.special.factorial(p1d)
-        ifact = scipy.special.factorial(i1d)
         ipfact = (i2d <= p2d).astype(int) / np.clip(scipy.special.factorial(p2d - i2d), 1.0, None)
         ippower = np.clip(p2d - i2d, 0, None)
         pmfac = (p2d_pm <= m2d_pm).astype(int)
