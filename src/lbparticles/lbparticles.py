@@ -69,23 +69,11 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha):
     return y0, y1
 
 
-def eval_proc(chi_eval, kclusters, eclusters, alpha, a, queue):
-    res_data = []
-    res_data_nu = []
-    for i in a:
-        y0, y1 = evaluate_integrals(
-            chi_eval,
-            i[2],
-            kclusters[i[0]],
-            eclusters[i[0]],
-            i[1],
-            i[3],
-            alpha,
-        )
-        res_data.append(y0)
-        res_data_nu.append(y1)
+def compute_target_data(args):
+    j, i, jj, m, Nclusters, time_order, Necc, Nnuk, chi_eval, kclusters, eclusters, alpha = args
 
-    queue.put((res_data, res_data_nu, a))
+    y0, y1 = evaluate_integrals(chi_eval, jj, kclusters[j], eclusters[j], i, m, alpha)
+    return j, jj, i, m, y0, y1
 
 
 @dataclass(frozen=True)
@@ -1153,6 +1141,7 @@ class Precomputer:
         R=8100.0,
         eps=1.0e-8,
         gravity=0.00449987,
+        use_multiprocessing=False
     ):
         """DOCSTRING"""
         self.time_order = time_order
@@ -1177,6 +1166,7 @@ class Precomputer:
         self.shape_zeros = None
         self.ek_logodds = None
         self.chi_eval = None
+        self.use_multiprocessing = use_multiprocessing
         self.identifier = (
             f"big_{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
         )
@@ -1246,62 +1236,36 @@ class Precomputer:
 
         self.chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
 
+        # This method should be equivalent and is much simpler. For John to test
+        if self.use_multiprocessing:
 
-        for j in range(self.Nclusters):
-            for i in range(self.time_order+ 2):
-                for jj in range(self.Necc):
-                    for m in range(self.Nnuk):
-                    # t_terms.append(res.y.flatten())
-                        y0,y1 = evaluate_integrals( self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m, self.alpha )
-                        target_data[:, j, jj, i, m] = y0
-                        target_data_nuphase[:, j, jj, i, m] = y1 
-        return target_data, target_data_nuphase
-        
-        # The following code is not equivalent to the for loops above and is therefore wrong.
-        # Guessing it's a mixup in the indexes, but don't have time to track it down.
+            pool = multiprocessing.Pool()
+            results = pool.map(compute_target_data,
+                               [(j, i, jj, m, self.Nclusters, self.time_order, self.Necc, self.Nnuk, self.chi_eval, self.kclusters, self.eclusters, self.alpha)
+                                for j in range(self.Nclusters)
+                                for i in range(self.time_order + 2)
+                                for jj in range(self.Necc)
+                                for m in range(self.Nnuk)])
+            pool.close()
+            pool.join()
 
-        a1 = np.arange(self.Nclusters)
-        a2 = np.arange(self.time_order + 2)
-        a3 = np.arange(self.Necc)
-        a4 = np.arange(self.Nnuk)
+            for result in results:
+                j, jj, i, m, y0, y1 = result
+                target_data[:, j, jj, i, m] = y0
+                target_data_nuphase[:, j, jj, i, m] = y1
+            return target_data, target_data_nuphase
 
-        proc_count = 1  # multiprocessing.cpu_count() - 1
-        num = self.Nclusters * (self.time_order + 2) * self.Necc * self.Nnuk
-        ns = [
-            num // proc_count + (1 if x < num % proc_count else 0)
-            for x in range(proc_count)
-        ]
-        data = it.product(a1, a3, a2, a4)
+        else:
 
-        processes = []
-        queue = multiprocessing.Queue()
-        for i in ns:
-            pass_data = it.islice(data, i)
-            process = multiprocessing.Process(
-                target=eval_proc,
-                args=(
-                    self.chi_eval,
-                    self.kclusters,
-                    self.eclusters,
-                    self.alpha,
-                    [*pass_data],
-                    queue,
-                ),
-            )
-            processes.append(process)
-            process.start()
-        c = []
-        while len(c) < proc_count and len(c) < proc_count:
-            x1, x2, a = queue.get()
-            for b, i in enumerate(a):
-                target_data[:, i[0], i[1], i[2], i[3]] = x1[b]
-                target_data_nuphase[:, i[0], i[1], i[2], i[3]] = x2[b]
-            c.append(a)
-
-        for process in processes:
-            process.join()
-
-        return target_data, target_data_nuphase
+            for j in range(self.Nclusters):
+                for i in range(self.time_order+ 2):
+                    for jj in range(self.Necc):
+                        for m in range(self.Nnuk):
+                        # t_terms.append(res.y.flatten())
+                            y0,y1 = evaluate_integrals( self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m, self.alpha )
+                            target_data[:, j, jj, i, m] = y0
+                            target_data_nuphase[:, j, jj, i, m] = y1
+            return target_data, target_data_nuphase
 
     def e_of_k(self, k):
         """The object's internal map between k and e0."""
