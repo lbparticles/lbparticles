@@ -34,58 +34,58 @@ class Particle:
         xCartIn: a 3-element numpy array of floats
             The position of the particle in Cartesian coordinates x,y,z. 
             If a disk potential is included (see zopt below), the disk is oriented
-             such that its midplane is at z=0.
+            such that its midplane is at z=0.
             The code was built under the assumption that the units of this vector
-             are pc, but in principle by changing the gravitational constant a 
-             different units system can be adopted.
+            are pc, but in principle by changing the gravitational constant a 
+            different units system can be adopted.
         vCartIn: a 3-element numpy array of floats
             The velocity of the particle in Cartesian coordinates, vx,vy,vz.
             The code was built under the assumption that the units of this vector
-             are pc/Myr, a unit very close to km/s.
+            are pc/Myr, a unit very close to km/s.
         psir: PotentialWrapper
             The potential in which the particle will orbit.
         lbdata: Precomputer
             A precomputer object. The accuracy of the code depends on the
-             precomputer being used. In particular the potential used to 
-             initialize the precomputer needs to be close enough to the 
-             potential used to initialize this particle (see psir above)
-             that k as a function of e does not change drastically. See
-             documentation of the precomputer for more details.
+            precomputer being used. In particular the potential used to 
+            initialize the precomputer needs to be close enough to the 
+            potential used to initialize this particle (see psir above)
+            that k as a function of e does not change drastically. See
+            documentation of the precomputer for more details.
         ordershape: int 
             The number of terms to use in a cosine series to describe the
-             relationship between phi (the angle around the galaxy) and eta
-             (an angle encapsulating the galactocentric radius of the particle)
-             Values greater than 5 are generally recommended, but will be application-
-             dependent.
+            relationship between phi (the angle around the galaxy) and eta
+            (an angle encapsulating the galactocentric radius of the particle)
+            Values greater than 5 are generally recommended, but will be application-
+            dependent.
         ordertime: int
             The number of terms to use in a cosine series relating time to
-             chi (an angle encapsulating the galactocentric radius of the particle).
-             Values greater than 5 are generally recommended, but will be application-
-             dependent.
+            chi (an angle encapsulating the galactocentric radius of the particle).
+            Values greater than 5 are generally recommended, but will be application-
+            dependent.
         quickreturn: bool
             Whether to return the particle object "early" after only computing the
-             conserved quantities (pericentre, apocentre, energy, angular momentum,
-             k, eccentricity). The particle will not be able to report its position
-             or velocity as a function of time.
+            conserved quantities (pericentre, apocentre, energy, angular momentum,
+            k, eccentricity). The particle will not be able to report its position
+            or velocity as a function of time.
         nchis: int
             Number of values of chi to use to interpolate the relationship between
-             chi and t. Must be less than or equal to the nchi used to initialize 
-             the precomputer. Values greater than ~100 are recommended. 
+            chi and t. Must be less than or equal to the nchi used to initialize 
+            the precomputer. Values greater than ~100 are recommended. 
         Nevalz: int
             Number of time points to record the numerical solution of the z-integral
-             when zopt (see below) is set to VertOptionEnum.INTEGRATE. Ignored otherwise.
-             Serves a similar purpose as nchis. Values greater than ~100 are recommended.
+            when zopt (see below) is set to VertOptionEnum.INTEGRATE. Ignored otherwise.
+            Serves a similar purpose as nchis. Values greater than ~100 are recommended.
         atolz: float
             Absolute tolerance of the numerical integration for the z-integral when zopt
-             (see below) is set to VertOptionEnum.INTEGRATE. Ignored otherwise. The 
-             integrator attempts to keep its error below atolz + rtolz*abs(z).
+            (see below) is set to VertOptionEnum.INTEGRATE. Ignored otherwise. The 
+            integrator attempts to keep its error below atolz + rtolz*abs(z).
         rtolz: float
             Relative tolerance of the numerical integration for the z-integral when zopt
-             (see below) is set to VertOptionEnum.INTEGRATE. Ignored otherwise. The 
-             integrator attempts to keep its error below atolz + rtolz*abs(z).
+            (see below) is set to VertOptionEnum.INTEGRATE. Ignored otherwise. The 
+            integrator attempts to keep its error below atolz + rtolz*abs(z).
         zopt: int
             How to deal with vertical oscillations with the inclusion of a disk potential.
-             Must be set to one of the following: 
+            Must be set to one of the following: 
                 VertOptionEnum.INTEGRATE -- numerically integrate z(t) for one orbital 
                     period. Robust, accurate, and a little bit costly. See parameters
                     Nevalz, atolz, rtolz.
@@ -103,7 +103,7 @@ class Particle:
                     not accurate
         Necc: int
             The number of terms to use in the Taylor series expansion for the integrand determining
-             t(chi), in terms of e. Must be less than Necc used to initialize the precomputer.
+            t(chi), in terms of e. Must be less than Necc used to initialize the precomputer.
         
         """
         self.nunought = nunought
