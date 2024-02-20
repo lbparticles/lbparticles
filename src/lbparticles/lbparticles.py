@@ -1064,7 +1064,7 @@ class PotentialWrapper:
         def to_integrate(r, _):
             return (
                 1.0
-                / (2.0*r * r * self.nur)
+                / (2.0*r * r * self.nur(r))
                 * (r * self.potential.ddr2(r) -  self.potential.ddr(r))
             )
 
