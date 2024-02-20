@@ -1,18 +1,11 @@
 from __future__ import annotations
 import numpy as np
-import pickle
 import copy
 import scipy.integrate
 import scipy.fft
 import scipy.spatial
-from scipy.spatial.transform import Rotation
-from dataclasses import dataclass
-from enum import Enum
-from lbparticles.potentials import Potential, LogPotential
-import multiprocessing
-import itertools as it
 
-from lbparticles.precomputer import Precomputer
+from scipy.spatial.transform import Rotation
 from lbparticles.util import cos_zeros, VertOptionEnum
 
 
@@ -23,7 +16,7 @@ class Particle:
         vCartIn,
         psir,
         nunought,
-        lbdata: Precomputer | None,
+        lbdata: None, # FIXME add type hinting back without causing cyclic dep issues
         rnought=8100.0,
         ordershape=1,
         ordertime=1,

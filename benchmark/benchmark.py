@@ -1,4 +1,4 @@
-from lbparticles import *
+from lbparticles import Precomputer, Particle, HernquistPotential, VertOptionEnum, PotentialWrapper
 
 import time
 import matplotlib.pyplot as plt
