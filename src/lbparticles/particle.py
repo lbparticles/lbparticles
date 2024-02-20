@@ -86,21 +86,21 @@ class Particle:
         zopt: int
             How to deal with vertical oscillations with the inclusion of a disk potential.
             Must be set to one of the following: 
-                VertOptionEnum.INTEGRATE -- numerically integrate z(t) for one orbital 
-                    period. Robust, accurate, and a little bit costly. See parameters
-                    Nevalz, atolz, rtolz.
-                VertOptionEnum.FOURIER -- expand the solution to z(t) in a Fourier series.
-                    Requires evaluation of formally-infinite determinants, but generally
-                    fast and accurate. Performance will depend on properties of nu(r).
-                VertOptionEnum.TILT  -- assume there is no influence from the disk. The
-                    particle will orbit in the plane specified by its initial angular momentum
-                    vector.
-                VertOptionEnum.FIRST -- use the first order term in the Fiore (2022)
-                    Volterra series expansion. Only valid if nu(r) is a powerlaw. Fast but
-                    not accurate
-                VertOptionEnum.ZERO -- use the 0th order term in the Fiore (2022)
-                    Volterra series expansion. Only valid if nu(r) is a powerlaw. Fast but
-                    not accurate
+            VertOptionEnum.INTEGRATE -- numerically integrate z(t) for one orbital 
+            period. Robust, accurate, and a little bit costly. See parameters
+            Nevalz, atolz, rtolz.
+            VertOptionEnum.FOURIER -- expand the solution to z(t) in a Fourier series.
+            Requires evaluation of formally-infinite determinants, but generally
+            fast and accurate. Performance will depend on properties of nu(r).
+            VertOptionEnum.TILT  -- assume there is no influence from the disk. The
+            particle will orbit in the plane specified by its initial angular momentum
+            vector.
+            VertOptionEnum.FIRST -- use the first order term in the Fiore (2022)
+            Volterra series expansion. Only valid if nu(r) is a powerlaw. Fast but
+            not accurate
+            VertOptionEnum.ZERO -- use the 0th order term in the Fiore (2022)
+            Volterra series expansion. Only valid if nu(r) is a powerlaw. Fast but
+            not accurate
         Necc: int
             The number of terms to use in the Taylor series expansion for the integrand determining
             t(chi), in terms of e. Must be less than Necc used to initialize the precomputer.
