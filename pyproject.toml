@@ -32,9 +32,9 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/unknown/lbparticles#readme"
-Issues = "https://github.com/unknown/lbparticles/issues"
-Source = "https://github.com/unknown/lbparticles"
+Documentation = "https://github.com/lbparticles/lbparticles#readme"
+Issues = "https://github.com/lbparticles/lbparticles/issues"
+Source = "https://github.com/lbparticles/lbparticles"
 
 [project.optional-dependencies]
 test = ["pytest"]
