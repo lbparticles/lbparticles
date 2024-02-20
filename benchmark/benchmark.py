@@ -223,7 +223,7 @@ class integration_benchmarker:
 def benchmark():
     #psir = logpotential(220.0)
     #psirr = HernquistPotential(20000, vcirc=220)
-    psirr = HernquistPotential(20000, mass=2.0e12)
+    psirr = HernquistPotential.mass(20000, 2.0e12)
     nu0 = np.sqrt(4*np.pi*G*0.2)
     alpha = 2.2
     def nu(r):
@@ -237,7 +237,8 @@ def benchmark():
     ordershape=14
     ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr
 
-    lbpre = Precomputer(psir, Nclusters=10)
+    lbpre = Precomputer(psir, Nclusters=10, use_multiprocessing=True)
+    lbpre.save()
     print("done precomputing")
 
 
@@ -506,7 +507,7 @@ def benchmark():
             ax.scatter( [results[j,ii].runtimes['1gyr'] for ii in range(Npart)], [results[j,ii].zerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='silver' )
         else:
             if 'ordertime' in kwargslist[j].keys():
-                if kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0 :
+                if (kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0) and (kwargslist[j]['ordershape'] == ordershape):
                     ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=1, alpha=alpha,edgecolors='k', s=siz )
                     ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='P', lw=1, alpha=alpha, edgecolors='k', s=siz )
                     ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='k', s=siz )

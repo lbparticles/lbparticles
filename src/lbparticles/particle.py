@@ -36,7 +36,6 @@ class Particle:
         quickreturn=False,
         profile=False,
         alpha=2.2,
-        adhoc=None,
         nchis=300,
         Nevalz=1000,
         atolz=1.0e-7,
@@ -47,7 +46,6 @@ class Particle:
         """
         Instantiate a particle
         """
-        self.adhoc = adhoc
         self.nunought = nunought
         self.alpha = alpha
         if lbdata is not None:
