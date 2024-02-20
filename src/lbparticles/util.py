@@ -86,7 +86,7 @@ class CylindVec:
 
 class VertOptionEnum(Enum):
     """
-    Enum representing possible vertical options
+    Enum representing possible vertical oscillations with the inclusion of a disk potential
     """
 
     INTEGRATE = 1

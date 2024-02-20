@@ -527,6 +527,21 @@ def evaluate_integrals(chis, jj, kIn, eIn, n, m, alpha):
 
 
 def compute_target_data(args):
+    """
+    Function that simply calls evaluate integrals with the given arguments list. This function only exists to be used
+    when multiprocessing as objects that are passed to different processes must be pickle-able.
+
+    Parameters
+    ----------
+    args : dict
+        All parameters needed to compute one innermost iteration of main precomputer loops
+
+    Returns
+    -------
+    results: tuple
+        Each of the four loop indices that were used for the computation along with the results y0 and y1.
+        These return values must be merged into target_data and target_data_nuphase.
+    """
     j, i, jj, m, Nclusters, time_order, Necc, Nnuk, chi_eval, kclusters, eclusters, alpha = args
 
     y0, y1 = evaluate_integrals(chi_eval, jj, kclusters[j], eclusters[j], i, m, alpha)
