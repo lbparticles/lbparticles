@@ -1,18 +1,14 @@
 from __future__ import annotations
-import numpy as np
-import pickle
-import copy
-import scipy.integrate
-import scipy.fft
-import scipy.spatial
-from scipy.spatial.transform import Rotation
-from dataclasses import dataclass
-from enum import Enum
 
-from lbparticles import PotentialWrapper, LogPotential, Particle
 import multiprocessing
-import itertools as it
+import pickle
+import numpy as np
+import scipy.fft
+import scipy.integrate
+import scipy.spatial
 
+from lbparticles.potentials import PotentialWrapper
+from lbparticles.particle import Particle
 from lbparticles.util import cos_zeros
 
 
