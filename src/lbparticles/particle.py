@@ -143,7 +143,7 @@ class Particle:
         self.peri = res_peri.root
         self.apo = res_apo.root
         self.X = self.apo / self.peri
-        dr = 0.00001 # TODO not used
+        dr = 0.00001  # TODO not used
         self.cRa = (
             self.apo * self.apo * self.apo / (self.h * self.h) * self.psi.ddr(self.apo)
         )
@@ -379,7 +379,7 @@ class Particle:
             )
 
         if zopt == VertOptionEnum.FOURIER:
-            self.initialize_z_fourier(40) # TODO allow user to adjust this number
+            self.initialize_z_fourier(40)  # TODO allow user to adjust this number
 
         if zopt == VertOptionEnum.INTEGRATE:
             self.initialize_z_numerical(rtol=rtolz, atol=atolz, Neval=Nevalz)
