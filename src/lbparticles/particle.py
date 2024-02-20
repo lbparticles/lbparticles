@@ -13,7 +13,8 @@ import multiprocessing
 import itertools as it
 
 from lbparticles.precomputer import Precomputer
-from lbparticles.util import cos_zeros
+from lbparticles.util import cos_zeros, VertOptionEnum
+
 
 class Particle:
     def __init__(
