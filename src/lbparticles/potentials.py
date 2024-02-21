@@ -161,10 +161,10 @@ class PowerlawPotential(Potential):
 
 
 class PotentialWrapper:
-    def __init__(self, potential: Potential, nur=None, dlnnur=None):
+    def __init__(self, potential: Potential, nur=None, dlnnudr=None):
         """DOCSTRING"""
         self.potential = potential
-        self.dlnnur = dlnnur
+        self.dlnnudr = dlnnudr
         self.nur = nur
         self.deltapsi_of_logr_fac = (
             None if self.nur == None else self.initialize_deltapsi()

@@ -86,19 +86,19 @@ class Particle:
         zopt: int
             How to deal with vertical oscillations with the inclusion of a disk potential.
             Must be set to one of the following: 
-            VertOptionEnum.INTEGRATE -- numerically integrate z(t) for one orbital 
+            - VertOptionEnum.INTEGRATE -- numerically integrate z(t) for one orbital 
             period. Robust, accurate, and a little bit costly. See parameters
             Nevalz, atolz, rtolz.
-            VertOptionEnum.FOURIER -- expand the solution to z(t) in a Fourier series.
+            -  VertOptionEnum.FOURIER -- expand the solution to z(t) in a Fourier series.
             Requires evaluation of formally-infinite determinants, but generally
             fast and accurate. Performance will depend on properties of nu(r).
-            VertOptionEnum.TILT  -- assume there is no influence from the disk. The
+            - VertOptionEnum.TILT  -- assume there is no influence from the disk. The
             particle will orbit in the plane specified by its initial angular momentum
             vector.
-            VertOptionEnum.FIRST -- use the first order term in the Fiore (2022)
+            - VertOptionEnum.FIRST -- use the first order term in the Fiore (2022)
             Volterra series expansion. Only valid if nu(r) is a powerlaw. Fast but
             not accurate
-            VertOptionEnum.ZERO -- use the 0th order term in the Fiore (2022)
+            - VertOptionEnum.ZERO -- use the 0th order term in the Fiore (2022)
             Volterra series expansion. Only valid if nu(r) is a powerlaw. Fast but
             not accurate
         Necc: int
@@ -106,11 +106,6 @@ class Particle:
             t(chi), in terms of e. Must be less than Necc used to initialize the precomputer.
         
         """
-        self.nunought = nunought
-        self.alpha = alpha
-        if lbdata is not None:
-            self.alpha = lbdata.alpha
-        self.rnought = rnought
         self.psi = psir
         self.ordershape = ordershape
         self.ordertime = ordertime
@@ -155,12 +150,23 @@ class Particle:
         u = (x * vx + y * vy) / R
         v = (x * vy - vx * y) / R
         w = vz
+
+        if psir.dlnnudr is None:
+            if self.zopt == VertOptionEnum.TILT:
+                self.alpha = 1.0 # doesn't matter for anything. All z-motion is consistent with zero
+            else:
+                self.alpha = None
+                raise ValueError("Potential doesn't include enough information about vertical oscillations - please specify a dlnnudr")
+        else:
+            self.alpha = -2*R*psir.dlnnudr(R)
+            nunought = psir.nu(R)
+            rnought = R
         self.Ez = 0.5 * (
-            w * w + (nunought * (R / self.rnought) ** (-alpha / 2.0)) ** 2 * z * z
+            w * w + self.psi.nur(R) ** 2 * z * z
         )
-        self.IzIC = self.Ez / (nunought * (R / self.rnought) ** -(alpha / 2.0))
+        self.IzIC = self.Ez / self.psi.nur(R)
         self.psiIC = np.arctan2(
-            z * (nunought * (R / self.rnought) ** -(alpha / 2.0)), w
+            z * self.psi.nur(R), w
         )
         self.h = R * v
         self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(R)
@@ -216,7 +222,7 @@ class Particle:
         self.k = np.log((-self.cRa - 1) / (self.cRp + 1)) / np.log(self.X)
 
         self.m0sq = (
-            2 * self.k * (1.0 + self.cRp) / (1.0 - self.X**-self.k) / (emcorr**2)
+            2 * self.k * (1.0 + self.cRp) / (1.0 - self.X**-self.k) 
         )
         self.m0 = np.sqrt(self.m0sq)
 
@@ -239,13 +245,12 @@ class Particle:
             self.ell
             * self.ell
             / (self.h * self.m0 * (1.0 - self.e * self.e) ** (nuk + 0.5))
-            / tcorr
         )
         nufac = (
             nunought
             * tfac
             * self.Ubar ** (-self.alpha / (2.0 * self.k))
-            / self.rnought ** (-self.alpha / 2.0)
+            / rnought ** (-self.alpha / 2.0)
         )
         if self.ordertime >= 0:
             timezeroes = cos_zeros(self.ordertime)
@@ -273,10 +278,6 @@ class Particle:
 
             wt_inv_arr = np.linalg.inv(wt_arr)
             self.wts = np.dot(wt_inv_arr, wtzeroes)
-            if wtwcorrs is None:
-                pass
-            else:
-                self.wts = self.wts + wtwcorrs
 
             self.wts_padded = list(self.wts) + list([0, 0, 0, 0])
 
@@ -399,11 +400,6 @@ class Particle:
 
         self.Ws = np.dot(W_inv_arr, Wzeroes)
 
-        if wcorrs is None:
-            pass
-        else:
-            assert len(wcorrs) == len(self.Ws)
-            self.Ws = self.Ws + wcorrs
 
         self.Wpadded = np.array(list(self.Ws) + [0, 0, 0, 0])
 
@@ -507,9 +503,7 @@ class Particle:
         return resX, resY, z - zref
 
     def nu(self, t):
-        return self.nunought * (self.rvectorized(t) / self.rnought) ** (
-            -self.alpha / 2.0
-        )
+        return self.psi.nur(self.rvectorized(t))
 
     def Norb(self, t):
         past_peri = t % self.Tr
@@ -568,7 +562,8 @@ class Particle:
         chi = self.chi_given_tperi(tPeri)
         rs = self.r_given_chi(chi)
 
-        nusqs = self.nunought**2 * (rs / self.rnought) ** (-self.alpha)
+        #nusqs = self.nunought**2 * (rs / self.rnought) ** (-self.alpha)
+        nusqs = self.psi.nur(rs)**2
 
         nusqs = nusqs * (self.Tr / np.pi) ** 2
         thetans = np.linalg.inv(matr) @ nusqs
@@ -738,7 +733,7 @@ class Particle:
         else:
             r, _, _, _ = self.rphi(0)
             self.IzIC = self.Ez / (
-                self.nunought * (r / self.rnought) ** -(self.alpha / 2.0)
+                self.psi.nur(r)
             )
 
         IZ = self.IzIC

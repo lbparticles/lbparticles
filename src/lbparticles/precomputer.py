@@ -33,9 +33,9 @@ class Precomputer:
         use_multiprocessing=True
     ):
         """DOCSTRING"""
+        self.psir = psir
         self.time_order = time_order
         self.shape_order = shape_order
-        self.psir = psir
         self.e_target = e_target
         self.nchis = nchis
         self.Nclusters = Nclusters
@@ -62,6 +62,7 @@ class Precomputer:
 
         v_target = self._init_first_pass()
         (self.target_data, self.target_data_nuphase) = self._init_second_pass(v_target)
+        del self.psir # not needed after initialization.
 
     def _init_first_pass(self):
         vs = np.linspace(self.vc / 10, self.vc * 2, self.Ninterp)

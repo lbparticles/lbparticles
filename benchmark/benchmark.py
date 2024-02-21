@@ -228,17 +228,18 @@ def benchmark():
     alpha = 2.2
     def nu(r):
         return nu0 * (r/8100.0)**(-alpha/2.0)
-    def dlnnur(r):
+    def dlnnudr(r):
         return -alpha/(2.0*r)
-    psir = PotentialWrapper( psirr, nur=nu)
+    psir = PotentialWrapper( psirr, nur=nu, dlnnudr=dlnnudr)
     xCart = np.array([8100.0, 0.0, 21.0])
     vCart = np.array([10.0, 230.0, 10.0])
     ordertime=5
     ordershape=14
     ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr
 
-    lbpre = Precomputer(psir, Nclusters=10, use_multiprocessing=True)
-    lbpre.save()
+    #lbpre = Precomputer(psir, Nclusters=10, use_multiprocessing=True)
+    #lbpre.save()
+    lbpre = Precomputer.load('big_10_1000_alpha2p2_lbpre.pickle')
     print("done precomputing")
 
 
@@ -256,43 +257,43 @@ def benchmark():
     colors = []
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':VertOptionEnum.INTEGRATE, 'nchis':100} )
     ids.append( r'$2\ \mathrm{Int }- n_\chi=100$' )
     simpleids.append('zintchi100')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
-    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':VertOptionEnum.FOURIER, 'nchis':100, 'profile':True} )
+    argslist.append( (psir, lbpre) ) 
+    kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':VertOptionEnum.FOURIER, 'nchis':100} )
     ids.append( r'Fourier - $n_\chi=100$' )
     simpleids.append('zintchi100')
     colors.append('orange')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':0,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot0')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':1,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot1')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':2,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot2')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':3,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot3')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':4,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot4')
@@ -304,19 +305,19 @@ def benchmark():
 #    simpleids.append('zintchi100ot5')
 #    colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':6,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot6')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':7,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot7')
     colors.append('r')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':8,  'nchis':100} )
     ids.append( None )
     simpleids.append('zintchi100ot8')
@@ -325,7 +326,7 @@ def benchmark():
 
     for ii in range(30):
 
-        argslist.append( (psir, nu0, lbpre) ) 
+        argslist.append( (psir, lbpre) ) 
         kwargslist.append( {'ordershape':ii, 'ordertime':ordertime, 'nchis':100} )
         ids.append( None )
         simpleids.append('zintchi100os'+str(ii).zfill(2))
@@ -345,38 +346,38 @@ def benchmark():
 #    colors.append('lightblue')
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape,'zopt':VertOptionEnum.FOURIER, 'nchis':100} )
     ids.append( r'Fourier - $n_\chi=100$' )
     simpleids.append('zfourierchi100ot8')
     colors.append('yellow')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'zopt':VertOptionEnum.FOURIER, 'nchis':300} )
     ids.append( r'Fourier - $n_\chi=1000$' )
     simpleids.append('zfourierchi1000ot8')
     colors.append('green')
 
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime,  'nchis':300} )
     ids.append( r'2 Int - $n_\chi=300$' )
     simpleids.append('zintchi300')
     colors.append('k')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime,  'nchis':20} )
     ids.append( r'2 Int - $n_\chi=20$' )
     simpleids.append('zintchi20')
     colors.append('pink')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':VertOptionEnum.FIRST, 'nchis':100} )
     ids.append( r'1st Order - $n_\chi=100$' )
     simpleids.append('fiore1chi20')
     colors.append('maroon')
 
-    argslist.append( (psir, nu0, lbpre) ) 
+    argslist.append( (psir, lbpre) ) 
     kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime, 'zopt':VertOptionEnum.ZERO, 'nchis':100} )
     ids.append( r'Fiore 0th - $n_\chi=100$' )
     simpleids.append('fiore0chi100')
