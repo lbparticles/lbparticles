@@ -467,7 +467,9 @@ class Precomputer:
             return pickle.load(file)
 
     def save(self) -> None:
-        with open(f"{self.identifier}_lbpre.pickle", "wb") as file:
+        savename = f"{self.identifier}_lbpre.pickle"
+        print("Saving file", savename)
+        with open(savename, "wb") as file:
             pickle.dump(self, file)
 
 

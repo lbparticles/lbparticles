@@ -199,7 +199,7 @@ class PotentialWrapper:
 
         return scipy.interpolate.CubicSpline(logr_eval, res.y.flatten())
 
-    def omega(self, r, Iz0=0):
+    def Omega(self, r, Iz0=0):
         return self.vc(r, Iz0=Iz0) / r
 
     def kappa(self, r, Iz0=0):
