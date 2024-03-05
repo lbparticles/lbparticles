@@ -12,8 +12,9 @@ computed in constant time.
 :maxdepth: 2
 
 pages/install
-pages/quickstart
+examples/quickstart
 pages/implement_a_potential
+examples/benchmark
 pages/api
 ```
 
