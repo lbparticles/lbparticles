@@ -62,6 +62,88 @@ class Potential(ABC):
         pass
 
 
+class galpyPotential(Potential):
+    '''
+    Wrapper for potentials to be imported from galpy.
+    '''
+    def __init__(self, pot, units, name=''):
+        self.pot = pot
+        self.isiterable = hasattr(self.pot,'__iter__')
+        self.name_input = name
+        self.units = units
+    def _rz(self, r, z):
+        return self.units.Quantity(r,'pc'),self.units.Quantity(z,'pc')
+    def __call__(self, r, **kwargs):
+        ret = 0.0
+        ru,zu = self._rz(r,0.0)
+        if self.isiterable:
+            for i in range(len(self.pot)):
+                ret += self.pot[i](ru,zu,**kwargs)
+        else:
+            ret += self.pot(ru,zu,**kwargs)
+        if hasattr(ret,'to'):
+            return -ret.to('pc**2/Myr**2').value
+        else:
+            return self.__call__(r,ro=8.,vo=220.)
+    def ddr(self,r,**kwargs):
+        ret = 0.0
+        ru,zu = self._rz(r,0.0)
+        if self.isiterable:
+            for i in range(len(self.pot)):
+                ret += self.pot[i].rforce(ru,zu,**kwargs)
+        else:
+            ret += self.pot.rforce(ru,zu,**kwargs)
+        if hasattr(ret,'to'):
+            return ret.to('pc/Myr**2').value
+        else:
+            return self.ddr(r,ro=8.,vo=220.)
+    def ddr2(self,r, **kwargs):
+        ret = 0.0
+        ru,zu = self._rz(r,0.0)
+        if self.isiterable:
+            for i in range(len(self.pot)):
+                ret += self.pot[i].R2deriv(ru,zu,**kwargs)
+        else:
+            ret += self.pot.R2deriv(ru,zu,**kwargs)
+        if hasattr(ret,'to'):
+            return -ret.to('Myr**-2').value
+        else:
+            return self.ddr2(r,ro=8.,vo=220.)
+    def name(self):
+        return self.name_input
+
+class galpyFreq:
+    def __init__(self,pot, units):
+        self.pot = pot
+        self.isiterable = hasattr(self.pot,'__iter__')
+        self.units = units
+    def _rz(self, r, z):
+        return self.units.Quantity(r,'pc'),self.units.Quantity(z,'pc')
+    def _check_spherical(self):
+        pass
+    def __call__(self,r,**kwargs):
+        ret = 0.0
+        ru,zu = self._rz(r,0.0)
+        if self.isiterable:
+            for i in range(len(self.pot)):
+                ret += self.pot[i].z2deriv(ru,zu,**kwargs)
+        else:
+            ret += self.pot.z2deriv(ru,zu,**kwargs)
+        if hasattr(ret,'to'):
+            return np.sqrt(ret.to('1/Myr**2').value)
+        else:
+            return self.__call__(r,ro=8.,vo=220.0)
+
+class numericalFreqDeriv:
+    def __init__(self, nu):
+        self.nu = nu
+    def __call__(self,r):
+        dr = 1.0e-3
+        return (np.log(self.nu(r+dr))-np.log(self.nu(r-dr)))/(2*dr)
+
+
+
+
 class LogPotential(Potential):
     def __init__(self, vcirc, nur=None):
         self.vcirc = vcirc
@@ -80,21 +162,6 @@ class LogPotential(Potential):
         return "logpotential" + str(self.vcirc).replace(".", "p")
 
 
-class NFWPotential(Potential):
-    def __init__(self):
-        return 0
-
-    def __call__(self, r):
-        return 0
-
-    def ddr(self, r):
-        return 0
-
-    def ddr2(self, r):
-        return 0
-
-    def name(self):
-        return 0
 
 
 class HernquistPotential(Potential):
@@ -135,29 +202,9 @@ class HernquistPotential(Potential):
 
     def name(self):
         """A unique name for the object"""
-        return (
-            "HernquistPotential_scale_"
-            + str(self.scale).replace(".", "p")
-            + "_mass_"
-            + str(self.mass).replace(".", "p")
-        )
-
-
-class PowerlawPotential(Potential):
-    def __init__(self):
-        return 0
-
-    def __call__(self, r):
-        return 0
-
-    def ddr(self, r):
-        return 0
-
-    def ddr2(self, r):
-        return 0
-
-    def name(self):
-        return 0
+        return ("Hernquist_scale_"
+            + "{:.2e}".format(self.scale)
+            +"_mass_{:.2e}".format(self.mass))
 
 
 class PotentialWrapper:
@@ -179,21 +226,26 @@ class PotentialWrapper:
 
     def initialize_deltapsi(self):
         def to_integrate(r, _):
-            return (
+            return [(
                 1.0
                 / (2.0*r * r * self.nur(r))
                 * (r * self.potential.ddr2(r) -  self.potential.ddr(r))
-            )
+            )]
 
-        t_eval = np.logspace(-5, np.log10(300) * 0.99999, 1000)
-        logr_eval = np.linspace(-5, np.log10(300) * 0.99999, 1000)
+        t_eval = np.logspace(1.0, np.log10(30000) * 0.99999, 1000)
+        logr_eval = np.linspace(1.0, np.log10(30000) * 0.99999, 1000)
+        import matplotlib.pyplot as plt
+        fig,ax = plt.subplots()
+        ax.plot(t_eval, [to_integrate(t,None) for t in t_eval])
+        plt.savefig('dbg_initializedeltapsi.png',dpi=300)
+        plt.close(fig)
         res = scipy.integrate.solve_ivp(
             to_integrate,
-            [1.0e-5, 300],
+            [10.0, 30000],
             [0],
-            method="DOP853",
-            rtol=1.0e-13,
-            atol=1.0e-13,
+            method="BDF",
+            rtol=1.0e-12,
+            atol=1.0e-12,
             t_eval=t_eval,
         )
 
@@ -249,4 +301,4 @@ class PotentialWrapper:
         )
 
     def name(self) -> str:
-        return "PotentialWrapper_" + self.potential.name()
+        return self.potential.name()

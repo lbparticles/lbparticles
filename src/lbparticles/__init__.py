@@ -6,11 +6,12 @@ __all__ = [
     "CartVec",
     "CylindVec",
     "LogPotential",
-    "PowerlawPotential",
     "HernquistPotential",
-    "NFWPotential",
     "VertOptionEnum",
     "Potential",
+    "galpyPotential",
+    "galpyFreq",
+    "numericalFreqDeriv"
 ]
 
 from lbparticles.particle import Particle, PiecewiseParticleWrapper
@@ -19,9 +20,10 @@ from lbparticles.util import CartVec, CylindVec, VertOptionEnum
 
 from lbparticles.potentials import (
     LogPotential,
-    PowerlawPotential,
     HernquistPotential,
-    NFWPotential,
     PotentialWrapper,
-    Potential
+    Potential,
+    galpyPotential,
+    galpyFreq,
+    numericalFreqDeriv
 )

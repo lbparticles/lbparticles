@@ -152,11 +152,15 @@ class Particle:
         w = vz
 
         if psir.dlnnudr is None:
-            if self.zopt == VertOptionEnum.TILT:
-                self.alpha = 1.0 # doesn't matter for anything. All z-motion is consistent with zero
-            else:
+            #if self.zopt == VertOptionEnum.TILT:
+            if self.zopt == VertOptionEnum.ZERO or self.zopt == VertOptionEnum.FIRST:
                 self.alpha = None
                 raise ValueError("Potential doesn't include enough information about vertical oscillations - please specify a dlnnudr")
+            else:
+                # These values are used to evaluate nufac, but nufac is not used for anything. Could be fixed!
+                nunought = 1.0
+                rnought = 1.0
+                self.alpha = 1.0  
         else:
             self.alpha = -2*R*psir.dlnnudr(R)
             nunought = psir.nu(R)
@@ -273,7 +277,9 @@ class Particle:
                     * (1.0 / self.perU + 1.0 / self.apoU)
                     * (1.0 - self.e * np.cos(timezeroes[i]))
                 )
-                assert np.isclose(ui, ui2)
+                if not np.isclose(ui, ui2):
+                    import pdb
+                    pdb.set_trace()
                 wtzeroes[i] = np.sqrt(self.essq(ui) / self.ess(ui)) - 1.0
 
             wt_inv_arr = np.linalg.inv(wt_arr)

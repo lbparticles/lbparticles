@@ -1,4 +1,4 @@
-from lbparticles import Precomputer, Particle, HernquistPotential, VertOptionEnum, PotentialWrapper
+from lbparticles import Precomputer, Particle, HernquistPotential, VertOptionEnum, PotentialWrapper, galpyPotential, galpyFreq, numericalFreqDeriv
 
 import time
 import matplotlib.pyplot as plt
@@ -16,7 +16,7 @@ def rms(arr):
 
 
 
-def particle_ivp2(t, y, psir, alpha, nu0):
+def particle_ivp2(t, y, psir):
     # y assumed to be a 6 x N particle array of positions and velocities.
     xx = y[0,:]
     yy = y[1,:]
@@ -62,13 +62,11 @@ class timer:
             print(self.labels[i], deltas[i], 100*deltas[i]/np.sum(deltas),r'%')
 
 class benchmark_groundtruth:
-    def __init__(self, ts, xcart, vcart, psir, alpha, nu0):
+    def __init__(self, ts, xcart, vcart, psir):
         self.ts = ts
         self.xcart = copy.deepcopy(xcart)
         self.vcart = copy.deepcopy(vcart)
         self.psir = psir
-        self.alpha = alpha
-        self.nu0 = nu0
     def run(self):
         ics = np.zeros(6)
         ics[:3] = self.xcart[:]
@@ -82,7 +80,7 @@ class benchmark_groundtruth:
         tim = timer()
         for i,t in enumerate(self.ts):
             if i>0:
-                res = scipy.integrate.solve_ivp( particle_ivp2, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=2.3e-14, atol=1.0e-14, method='DOP853', args=(self.psir, self.alpha, self.nu0))
+                res = scipy.integrate.solve_ivp( particle_ivp2, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=2.3e-14, atol=1.0e-14, method='DOP853', args=(self.psir,))
                 self.partarray[:,i] = res.y[:,-1]
                 tprev = t
         tim.tick('run')
@@ -164,7 +162,7 @@ class integration_benchmarker:
         ics = np.zeros(6)
         ics[:3] = self.groundtruth.xcart[:]
         ics[3:] = self.groundtruth.vcart[:]
-        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts)], ics, *self.args, args=(self.groundtruth.psir,self.groundtruth.alpha,self.groundtruth.nu0), t_eval=self.groundtruth.ts, **self.kwargs ) # RK4 vs DOP853 vs BDF.
+        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts)], ics, *self.args, args=(self.groundtruth.psir,), t_eval=self.groundtruth.ts, **self.kwargs ) # RK4 vs DOP853 vs BDF.
         tim.tick('run')
         self.partarray = res.y
         self.runtim= tim.timeto('run')
@@ -205,13 +203,13 @@ class integration_benchmarker:
         ics = np.zeros(6)
         ics[:3] = self.groundtruth.xcart[:]
         ics[3:] = self.groundtruth.vcart[:]
-        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts[timerange[0]:timerange[1]])], ics, *self.args, args=(self.groundtruth.psir,self.groundtruth.alpha,self.groundtruth.nu0), t_eval=self.groundtruth.ts[timerange[0]:timerange[1]], **self.kwargs ) 
+        res = scipy.integrate.solve_ivp(particle_ivp2, [0,np.max(self.groundtruth.ts[timerange[0]:timerange[1]])], ics, *self.args, args=(self.groundtruth.psir,), t_eval=self.groundtruth.ts[timerange[0]:timerange[1]], **self.kwargs ) 
         tim.tick('run')
         self.runtimes[identifier] = tim.timeto('run')
 
         if not psir is None:
-            partStart = Particle(self.partarray[:3,0], self.partarray[3:,0], psir, nu0, None, quickreturn=True, zopt='integrate')
-            partEnd = Particle(self.partarray[:3,timerange[0]], self.partarray[3:,timerange[0]], psir, nu0, None, quickreturn=True, zopt='integrate')
+            partStart = Particle(self.partarray[:3,0], self.partarray[3:,0], psir, None, quickreturn=True, zopt='integrate')
+            partEnd = Particle(self.partarray[:3,timerange[0]], self.partarray[3:,timerange[0]], psir, None, quickreturn=True, zopt='integrate')
             self.herrs[identifier] = (partEnd.h - partStart.h)/partStart.h
             self.epserrs[identifier] = (partEnd.epsilon - partStart.epsilon)/partStart.epsilon
             self.apoerrs[identifier] = (partEnd.apo - partStart.apo)/partStart.apo
@@ -224,13 +222,21 @@ def benchmark():
     #psir = logpotential(220.0)
     #psirr = HernquistPotential(20000, vcirc=220)
     psirr = HernquistPotential.mass(20000, 2.0e12)
-    nu0 = np.sqrt(4*np.pi*G*0.2)
-    alpha = 2.2
-    def nu(r):
-        return nu0 * (r/8100.0)**(-alpha/2.0)
-    def dlnnudr(r):
-        return -alpha/(2.0*r)
+
+    import galpy.potential
+    mw2014 = galpy.potential.MWPotential2014
+    psirr = galpyPotential(mw2014)
+    nu = galpyFreq(mw2014)
+    dlnnudr = numericalFreqDeriv(nu)
+    print("potential set up 1")
+#    nu0 = np.sqrt(4*np.pi*G*0.2)
+#    alpha = 2.2
+#    def nu(r):
+#        return nu0 * (r/8100.0)**(-alpha/2.0)
+#    def dlnnudr(r):
+#        return -alpha/(2.0*r)
     psir = PotentialWrapper( psirr, nur=nu, dlnnudr=dlnnudr)
+    print("potential set up 2")
     xCart = np.array([8100.0, 0.0, 21.0])
     vCart = np.array([10.0, 230.0, 10.0])
     ordertime=5
@@ -240,6 +246,7 @@ def benchmark():
     #lbpre = Precomputer(psir, Nclusters=10, use_multiprocessing=True)
     #lbpre.save()
     lbpre = Precomputer.load('big_10_1000_alpha2p2_lbpre.pickle')
+    #lbpre = Precomputer.load('big_10_1000_alpha2p2_lbpre.pickle')
     print("done precomputing")
 
 
@@ -434,7 +441,7 @@ def benchmark():
         dv = np.random.randn(3)*25.0
         vCartThis = vCart + dv
         
-        gt = benchmark_groundtruth( ts, xCart, vCartThis, psir, alpha, nu0 )
+        gt = benchmark_groundtruth( ts, xCart, vCartThis, psir )
         gt.run()
 
         for j in range(len(argslist)):
@@ -459,9 +466,9 @@ def benchmark():
             else:
                 results[j,ii] = integration_benchmarker(gt,ids[j],argslist[j],kwargslist[j])
                 results[j,ii].run()
-                results[j,ii].estimate_errors([9000,10000],'lastgyr', psir=psir,nu0=nu0)
+                results[j,ii].estimate_errors([9000,10000],'lastgyr', psir=psir)
                 results[j,ii].estimate_errors([200,300],'200myr')
-                results[j,ii].estimate_errors([900,1000],'1gyr', psir=psir,nu0=nu0)
+                results[j,ii].estimate_errors([900,1000],'1gyr', psir=psir)
                 results[j,ii].errs_at_fixed_time(0.025, 'fixedtime', rtol=0.2)
 
 
