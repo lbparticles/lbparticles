@@ -234,11 +234,6 @@ class PotentialWrapper:
 
         t_eval = np.logspace(1.0, np.log10(30000) * 0.99999, 1000)
         logr_eval = np.linspace(1.0, np.log10(30000) * 0.99999, 1000)
-        import matplotlib.pyplot as plt
-        fig,ax = plt.subplots()
-        ax.plot(t_eval, [to_integrate(t,None) for t in t_eval])
-        plt.savefig('dbg_initializedeltapsi.png',dpi=300)
-        plt.close(fig)
         res = scipy.integrate.solve_ivp(
             to_integrate,
             [10.0, 30000],
