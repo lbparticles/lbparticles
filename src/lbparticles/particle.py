@@ -166,7 +166,7 @@ class Particle:
             nunought = psir.nu(R)
             rnought = R
         self.Ez = 0.5 * (
-            w * w + self.psi.nur(R) ** 2 * z * z
+            w * w + self.psi.nu(R) ** 2 * z * z
         )
         self.IzIC = self.Ez / self.psi.nur(R)
         self.psiIC = np.arctan2(
