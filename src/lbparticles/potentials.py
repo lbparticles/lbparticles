@@ -73,9 +73,9 @@ class galpyPotential(Potential):
         self.units = units
     def _rz(self, r, z):
         return self.units.Quantity(r,'pc'),self.units.Quantity(z,'pc')
-    def __call__(self, r, **kwargs):
+    def __call__(self, r, z=0., **kwargs):
         ret = 0.0
-        ru,zu = self._rz(r,0.0)
+        ru,zu = self._rz(r,z)
         if self.isiterable:
             for i in range(len(self.pot)):
                 ret += self.pot[i](ru,zu,**kwargs)
@@ -113,17 +113,38 @@ class galpyPotential(Potential):
         return self.name_input
 
 class galpyFreq:
-    def __init__(self,pot, units):
+    def __init__(self,pot, units, forSureNotSpherical=False):
         self.pot = pot
         self.isiterable = hasattr(self.pot,'__iter__')
         self.units = units
+        self.likelySpherical = self._check_spherical()
+        if self.likelySpherical:
+            print("WARNING: it looks like you're inferring a vertical frequency from the shape of a spherical potential!")
+            print("If you want to just look at orbits in a spherical potential, you are better off not specifying a value of nu,")
+            print(" and simply using the TILT option when initializing particles in this potential.")
+            print("If you want to include the effects of a disk, you have to specify nu(r) another way, either as its own")
+            print(" function, or using this class but with a galpy potential that is not spherically symmetric.")
+            if not forSureNotSpherical:
+                print("Raising an error because of this issue. To forge ahead because you're certain the potential isn't actually spherical")
+                print("you can suppress this error message by passing forSureNotSpherical=True to this constructor.")
+                raise ValueError
+
     def _rz(self, r, z):
         return self.units.Quantity(r,'pc'),self.units.Quantity(z,'pc')
-    def _check_spherical(self):
-        pass
-    def __call__(self,r,**kwargs):
+    def _check_spherical(self, scale=1.):
+        ''' Check whether the potential is spherical so we can warn the user not to 
+        use nu(r) and just use tilt'''
+        # check a couple of spots.
+        gpp = galpyPotential(self.pot,self.units)
+        rz = gpp(4000.*scale,z=3000.*scale)
+        rsph = gpp(5000.*scale)
+
+        rz2 = gpp(12000.*scale,z=5000.*scale)
+        rsph2 = gpp(13000.*scale)
+        return np.isclose(rz,rsph) and np.isclose(rz2, rsph2)
+    def __call__(self,r, **kwargs):
         ret = 0.0
-        ru,zu = self._rz(r,0.0)
+        ru,zu = self._rz(r,0.)
         if self.isiterable:
             for i in range(len(self.pot)):
                 ret += self.pot[i].z2deriv(ru,zu,**kwargs)
@@ -223,7 +244,6 @@ class PotentialWrapper:
             if Iz0 == 0
             else self.potential(r) + Iz0 * self.deltapsi_of_logr_fac(np.log10(r))
         )
-
     def initialize_deltapsi(self):
         def to_integrate(r, _):
             return [(
