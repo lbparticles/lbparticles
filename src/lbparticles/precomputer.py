@@ -8,125 +8,71 @@ import scipy.integrate
 import scipy.spatial
 
 from lbparticles.potentials import PotentialWrapper
-from lbparticles.particle import Particle
 from lbparticles.util import cos_zeros
 
 
 class Precomputer:
     def __init__(
         self,
-        psir: PotentialWrapper,
         time_order=10,
         shape_order=100,
-        e_target=0.08,
         nchis=1000,
-        Nclusters=10,
+        N_grid_e = 10,
+        N_grid_nuk = 4,
+        grid_e_min = 0.05,
+        grid_e_max = 0.95,
+        grid_nuk_min = 0.25,
+        grid_nuk_max = 0.6,
         Necc=10,
-        Ninterp=1000,
         Nnuk=5,
         alpha=2.2,
         logodds_initialized=False,
-        vwidth=50,
-        R=8100.0,
         eps=1.0e-8,
-        gravity=0.00449987,
         use_multiprocessing=True
     ):
         """DOCSTRING"""
-        self.psir = psir
         self.time_order = time_order
         self.shape_order = shape_order
-        self.e_target = e_target
         self.nchis = nchis
-        self.Nclusters = Nclusters
+        self.N_grid_e = N_grid_e
+        self.N_grid_nuk = N_grid_nuk
         self.alpha = alpha
-        self.vwidth = vwidth
-        self.R = R
         self.eps = eps
-        self.gravity = gravity
-        self.vc = self.psir.vc(R)
-        self.Ninterp = Ninterp
-        self.ks = np.zeros(self.Ninterp)
-        self.es = np.zeros(self.Ninterp)
         self.Nnuk = Nnuk
         self.Necc = Necc
         self.logodds_initialized = logodds_initialized
         self.Warrs = None
         self.shape_zeros = None
-        self.ek_logodds = None
         self.chi_eval = None
         self.use_multiprocessing = use_multiprocessing
         self.identifier = (
             f"big_{time_order:0>2}_{nchis:0>4}_alpha{str(alpha).replace('.', 'p')}"
         )
 
-        v_target = self._init_first_pass()
-        (self.target_data, self.target_data_nuphase) = self._init_second_pass(v_target)
-        del self.psir # not needed after initialization.
+        #v_target = self._init_first_pass()
+        self.Nclusters = N_grid_e*N_grid_nuk
+        es = np.linspace(grid_e_min,grid_e_max,N_grid_e)
+        nuks = np.linspace(grid_nuk_min,grid_nuk_max,N_grid_nuk)
+        
+        egrid, nukgrid = np.meshgrid(es,nuks,indexing='ij')
+        self.eclusters = egrid.flatten()
+        self.nukclusters = nukgrid.flatten()
 
-    def _init_first_pass(self):
-        vs = np.linspace(self.vc / 10, self.vc * 2, self.Ninterp)
-        for i in range(self.Ninterp):
-            x_cart = [self.R, 0, 0]
-            v_cart = [1.0, vs[i], 0]
-            particle = Particle(x_cart, v_cart, self.psir, 1.0, None, quickreturn=True)
-            self.es[i] = particle.e
-            self.ks[i] = particle.k
-        i = np.nanargmin(np.abs(self.es - self.e_target))
-        v_target = vs[i]
-        return v_target
+        # nuk = 2/k - 1 =>  k = 2/(nuk+1)
+        self.kclusters = 2./(self.nukclusters+1.)
 
-    def _init_second_pass(self, v_target):
-        """
-        Complete a second pass on a more useful range of velocities <--> e's <--> k's.
-        """
-        vs = np.linspace(
-            v_target - self.vwidth, v_target + self.vwidth, self.Ninterp - 22
-        )
-        vs = np.concatenate([vs, np.zeros(22) + 1000])
-        v_close_ind = np.argmin(np.abs(vs - self.vc))
-        v_close = np.abs(vs[v_close_ind] - self.vc)
-        # Add in more points close to zero eccentricity
-        vs[-11:] = np.linspace(self.vc - 0.9 * v_close, self.vc + 0.9 * v_close, 11)
-        v_close_ind = np.argmin(np.abs(vs))
-        v_close = np.abs(vs[v_close_ind])
-        vs[-22:-11] = np.linspace(v_close / 10.0, v_close * 0.9, 11)
-        for i in range(self.Ninterp):
-            x_cart = [self.R, 0, 0]
-            v_cart = [0.01, vs[i], 0]
-            particle = Particle(x_cart, v_cart, self.psir, 1.0, None, quickreturn=True)
-            self.es[i] = particle.e
-            self.ks[i] = particle.k
-
-        valid = np.logical_and(np.isfinite(self.ks), np.isfinite(self.es))
-        vs = vs[valid]
-        self.es = self.es[valid]
-        self.ks = self.ks[valid]
-        # FIXME: This seems pointless?
-        # self.Ninterp = np.sum(valid)
-
-        self._initialize_e_of_k()
-
-        target_data = np.zeros(
+        self.target_data = np.zeros(
             (self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk)
         )
 
-        target_data_nuphase = np.zeros(
+        self.target_data_nuphase = np.zeros(
             (self.nchis, self.Nclusters, self.Necc, self.time_order + 2, self.Nnuk)
         )
 
-        self.eclusters = np.linspace(0.05, 0.95, self.Nclusters)
-        self.kclusters = np.zeros(self.Nclusters)
-        for i, e in enumerate(self.eclusters):
-            # find the closest k.
-            ii = np.argmin(np.abs(self.es - e))
-            self.kclusters[i] = self.ks[ii]
-        self.nukclusters = 2.0 / self.kclusters - 1.0
         self.mukclusters = self.nukclusters - self.alpha / (2.0 * self.kclusters)
 
         self.chi_eval = np.linspace(0, 2.0 * np.pi, self.nchis)
 
-        # This method should be equivalent and is much simpler. For John to test
         if self.use_multiprocessing:
 
             pool = multiprocessing.Pool()
@@ -141,9 +87,8 @@ class Precomputer:
 
             for result in results:
                 j, jj, i, m, y0, y1 = result
-                target_data[:, j, jj, i, m] = y0
-                target_data_nuphase[:, j, jj, i, m] = y1
-            return target_data, target_data_nuphase
+                self.target_data[:, j, jj, i, m] = y0
+                self.target_data_nuphase[:, j, jj, i, m] = y1
 
         else:
 
@@ -153,27 +98,9 @@ class Precomputer:
                         for m in range(self.Nnuk):
                         # t_terms.append(res.y.flatten())
                             y0,y1 = evaluate_integrals( self.chi_eval, jj, self.kclusters[j], self.eclusters[j], i, m, self.alpha )
-                            target_data[:, j, jj, i, m] = y0
-                            target_data_nuphase[:, j, jj, i, m] = y1
-            return target_data, target_data_nuphase
+                            self.target_data[:, j, jj, i, m] = y0
+                            self.target_data_nuphase[:, j, jj, i, m] = y1
 
-    def e_of_k(self, k):
-        """The object's internal map between k and e0."""
-        return 1.0 / (1.0 + np.exp(self.ek_logodds(k)))
-
-    def _initialize_e_of_k(self):
-        if self.logodds_initialized:
-            raise Exception(
-                "The e-k relationship has already been initialized and it is trying to be initialized again. This is extremely dangerous because the e-k relationship is baked in to the indexing scheme already."
-            )
-        to_sort_k = np.argsort(self.ks)
-        x = self.ks[to_sort_k]
-        y = np.clip(np.log(1.0 / self.es[to_sort_k] - 1.0), -1.0, 2.5)
-        valid = np.logical_and(np.isfinite(x), np.isfinite(y))
-        self.ek_logodds = scipy.interpolate.InterpolatedUnivariateSpline(
-            x[valid], y[valid], k=1
-        )
-        self.logodds_initialized = True
 
     def invert(self, order_shape):
         if self.Warrs is not None and self.shape_zeros is not None:
