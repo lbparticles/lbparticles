@@ -66,57 +66,40 @@ class galpyPotential(Potential):
     '''
     Wrapper for potentials to be imported from galpy.
     '''
-    def __init__(self, pot, units, name=''):
+    def __init__(self, pot, units, galpy, ro=8., vo=220., name=''):
         self.pot = pot
         self.isiterable = hasattr(self.pot,'__iter__')
         self.name_input = name
         self.units = units
+        self.ro=ro
+        self.vo=vo
+        self.galpyDotPotential = galpy # pointer to galpy
     def _rz(self, r, z):
         return self.units.Quantity(r,'pc'),self.units.Quantity(z,'pc')
-    def __call__(self, r, z=0., **kwargs):
+    def __call__(self, r, z=0.):
         ret = 0.0
         ru,zu = self._rz(r,z)
-        if self.isiterable:
-            for i in range(len(self.pot)):
-                ret += self.pot[i](ru,zu,**kwargs)
-        else:
-            ret += self.pot(ru,zu,**kwargs)
-        if hasattr(ret,'to'):
-            return -ret.to('pc**2/Myr**2').value
-        else:
-            return self.__call__(r,ro=8.,vo=220.)
+        return -self.galpyDotPotential.evaluatePotentials(self.pot,ru,zu,ro=self.ro,vo=self.vo).to('pc**2/Myr**2').value
     def ddr(self,r,**kwargs):
         ret = 0.0
         ru,zu = self._rz(r,0.0)
-        if self.isiterable:
-            for i in range(len(self.pot)):
-                ret += self.pot[i].rforce(ru,zu,**kwargs)
-        else:
-            ret += self.pot.rforce(ru,zu,**kwargs)
-        if hasattr(ret,'to'):
-            return ret.to('pc/Myr**2').value
-        else:
-            return self.ddr(r,ro=8.,vo=220.)
+        return self.galpyDotPotential.evaluateRforces(self.pot, ru, zu, ro=self.ro,vo=self.vo).to('pc/Myr**2').value
     def ddr2(self,r, **kwargs):
         ret = 0.0
         ru,zu = self._rz(r,0.0)
-        if self.isiterable:
-            for i in range(len(self.pot)):
-                ret += self.pot[i].R2deriv(ru,zu,**kwargs)
-        else:
-            ret += self.pot.R2deriv(ru,zu,**kwargs)
-        if hasattr(ret,'to'):
-            return -ret.to('Myr**-2').value
-        else:
-            return self.ddr2(r,ro=8.,vo=220.)
+        return -self.galpyDotPotential.evaluateR2derivs(self.pot, ru,zu,ro=self.ro,vo=self.vo).to('Myr**-2').value
     def name(self):
         return self.name_input
 
 class galpyFreq:
-    def __init__(self,pot, units, forSureNotSpherical=False):
+    def __init__(self,pot, units, galpy, ro=8., vo=220., forSureNotSpherical=False):
         self.pot = pot
         self.isiterable = hasattr(self.pot,'__iter__')
         self.units = units
+        self.galpyDotPotential = galpy
+        self.ro=ro
+        self.vo=vo
+        
         self.likelySpherical = self._check_spherical()
         if self.likelySpherical:
             print("WARNING: it looks like you're inferring a vertical frequency from the shape of a spherical potential!")
@@ -135,7 +118,7 @@ class galpyFreq:
         ''' Check whether the potential is spherical so we can warn the user not to 
         use nu(r) and just use tilt'''
         # check a couple of spots.
-        gpp = galpyPotential(self.pot,self.units)
+        gpp = galpyPotential(self.pot,self.units,self.galpyDotPotential,ro=self.ro,vo=self.vo)
         rz = gpp(4000.*scale,z=3000.*scale)
         rsph = gpp(5000.*scale)
 
@@ -145,15 +128,7 @@ class galpyFreq:
     def __call__(self,r, **kwargs):
         ret = 0.0
         ru,zu = self._rz(r,0.)
-        if self.isiterable:
-            for i in range(len(self.pot)):
-                ret += self.pot[i].z2deriv(ru,zu,**kwargs)
-        else:
-            ret += self.pot.z2deriv(ru,zu,**kwargs)
-        if hasattr(ret,'to'):
-            return np.sqrt(ret.to('1/Myr**2').value)
-        else:
-            return self.__call__(r,ro=8.,vo=220.0)
+        return np.sqrt(self.galpyDotPotential.evaluatez2derivs(self.pot,ru,zu,ro=self.ro,vo=self.vo).to('1/Myr**2').value)
 
 class numericalFreqDeriv:
     def __init__(self, nu):

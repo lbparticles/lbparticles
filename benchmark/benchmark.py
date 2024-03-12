@@ -224,9 +224,10 @@ def benchmark():
     psirr = HernquistPotential.mass(20000, 2.0e12)
 
     import galpy.potential
+    import astropy.units as units
     mw2014 = galpy.potential.MWPotential2014
-    psirr = galpyPotential(mw2014)
-    nu = galpyFreq(mw2014)
+    psirr = galpyPotential(mw2014, units, galpy.potential)
+    nu = galpyFreq(mw2014, units, galpy.potential)
     dlnnudr = numericalFreqDeriv(nu)
     print("potential set up 1")
 #    nu0 = np.sqrt(4*np.pi*G*0.2)
@@ -245,7 +246,7 @@ def benchmark():
 
     #lbpre = Precomputer(psir, Nclusters=10, use_multiprocessing=True)
     #lbpre.save()
-    lbpre = Precomputer.load('big_10_1000_alpha2p2_lbpre.pickle')
+    lbpre = Precomputer.load('../big_10_1000_alpha2p2_lbpre.pickle')
     #lbpre = Precomputer.load('big_10_1000_alpha2p2_lbpre.pickle')
     print("done precomputing")
 
@@ -253,7 +254,7 @@ def benchmark():
     #lbpre.generate_interpolators()
     #lbpre.save()
 
-    Npart = 12
+    Npart = 3
     #results = np.zeros((49,Npart))
 
 
@@ -625,7 +626,7 @@ def benchmark():
         if results[j,0].isparticle():
             if 'ordertime' in kwargslist[j].keys():
                 if results[j,ii].part.zopt == VertOptionEnum.INTEGRATE:
-                    des = np.array([lbpre.e_of_k(results[j,ii].part.k) - results[j,ii].part.e for ii in range(Npart)] )
+                    des = np.array([dist_to_nearest_e(lbpre, results[j,ii].part.e) for ii in range(Npart)] )
                     sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
                     dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
                     #sizes = 90+np.log10(sizes)*10
@@ -664,7 +665,7 @@ def benchmark():
         if results[j,0].isparticle():
             if 'ordertime' in kwargslist[j].keys():
                 if results[j,ii].part.zopt == VertOptionEnum.INTEGRATE and results[j,ii].part.ordershape==ordershape:
-                    des = np.array([lbpre.e_of_k(results[j,ii].part.k) - results[j,ii].part.e for ii in range(Npart)] )
+                    des = np.array([dist_to_nearest_e(lbpre, results[j,ii].part.e) for ii in range(Npart)] )
                     sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
                     dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
                     #sizes = 90+np.log10(sizes)*10
@@ -705,7 +706,7 @@ def benchmark():
         if results[j,0].isparticle():
             if 'ordershape' in kwargslist[j].keys():
                 if results[j,ii].part.zopt == VertOptionEnum.INTEGRATE and results[j,ii].part.ordertime==ordertime:
-                    des = np.array([lbpre.e_of_k(results[j,ii].part.k) - results[j,ii].part.e for ii in range(Npart)] )
+                    des = np.array([dist_to_nearest_e(lbpre, results[j,ii].part.e) for ii in range(Npart)] )
                     sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
                     dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
                     #sizes = 90+np.log10(sizes)*10
@@ -743,8 +744,12 @@ def benchmark():
 
 
 def dist_to_nearest_k(lbpre, k):
-    i = np.argmin( np.abs(lbpre.ks - k) )
-    return np.abs(lbpre.ks[i] - k)
+    i = np.argmin( np.abs(lbpre.kclusters - k) )
+    return np.abs(lbpre.kclusters[i] - k)
+
+def dist_to_nearest_e(lbpre, e):
+    i = np.argmin( np.abs(lbpre.eclusters - e) )
+    return np.abs(lbpre.eclusters[i] - e)
 
 
 
