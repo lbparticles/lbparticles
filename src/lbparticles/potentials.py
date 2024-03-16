@@ -276,9 +276,16 @@ class PotentialWrapper:
         return np.sqrt(-r * self.ddr(r, Iz0))
 
     def gamma(self, r, Iz0=0):
-        beta = (r / self.vc(r, Iz0=Iz0)) * (
-            self.ddr(r, Iz0=Iz0) + r * self.ddr2(r, Iz0=Iz0)
-        )
+        ''' gamma = kappa/Omega = sqrt(2(beta+1)), where beta=dlnvc/dlnr '''
+        # vc = sqrt( - r ddr(r) )
+        #  => dv/dr = (1/2) ( - r ddr(r) )^(-1/2) (-r ddr2(r) - ddr(r)) 
+        #  => dv/dr = - (1/2vc)  (r ddr2(r) + ddr(r)) 
+        #  => beta  = - (r/2vc^2)  (r ddr2(r) + ddr(r)) 
+        #beta = (r / self.vc(r, Iz0=Iz0)) * (
+        #    self.ddr(r, Iz0=Iz0) + r * self.ddr2(r, Iz0=Iz0)
+        #)
+        vc = self.vc(r,Iz0=Iz0)
+        beta = -(r/(2*vc*vc)) * (self.ddr(r,Iz0=Iz0) + r*self.ddr2(r,Iz0=Iz0)) 
         return np.sqrt(2 * (beta + 1))
 
     def nu(self, r, Iz0=0):
