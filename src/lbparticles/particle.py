@@ -142,8 +142,9 @@ class Particle:
         vx, vy, vz = vCart
 
         if self.zopt == VertOptionEnum.TILT:
-            assert np.isclose(z, 0)
-            assert np.isclose(vz, 0)
+            # generally these are slightly off because of roundoff error in constructing self.rot.
+            assert np.isclose(z, 0, atol=1.0e-4)
+            assert np.isclose(vz, 0, atol=1.0e-4)
 
         R = np.sqrt(x * x + y * y)
         theta = np.arctan2(y, x)
@@ -887,8 +888,9 @@ class Particle:
         coschi = np.asarray(np.cos(chi))
         sqrte = np.sqrt(1 - self.e * self.e)
 
+        # clip is necessary because occasionally rounding errors will yield an argument like 1.00000000000000000009
         eta_from_arccos = np.arccos(
-            ((1.0 - self.e * self.e) / (1.0 - self.e * coschi) - 1.0) / self.e
+            np.clip(((1.0 - self.e * self.e) / (1.0 - self.e * coschi) - 1.0) / self.e,-1.,1.)
         )
         eta_ret = None
         ret = np.where(sinchi > 0, eta_from_arccos, 2 * np.pi - eta_from_arccos)
