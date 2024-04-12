@@ -199,6 +199,18 @@ class Particle:
             rtol=1.0e-8,
             xtol=1.0e-10,
         )
+        if not res_peri.converged:
+            res_peri = scipy.optimize.root_scalar(
+                fpp,
+                args=(self.epsilon, self.h),
+                fprime=True,
+                fprime2=True,
+                x0=peri_zero,
+                method="newton",
+                rtol=1.0e-8,
+                xtol=1.0e-10,
+            )
+
         res_apo = scipy.optimize.root_scalar(
             fpp,
             args=(self.epsilon, self.h),
@@ -209,6 +221,19 @@ class Particle:
             rtol=1.0e-8,
             xtol=1.0e-10,
         )
+
+        if not res_apo.converged:
+            res_apo = scipy.optimize.root_scalar(
+                fpp,
+                args=(self.epsilon, self.h),
+                fprime=True,
+                fprime2=True,
+                x0=apo_zero,
+                method="newton",
+                rtol=1.0e-8,
+                xtol=1.0e-10,
+            )
+
         self.peri = res_peri.root
         self.apo = res_apo.root
         self.X = self.apo / self.peri
