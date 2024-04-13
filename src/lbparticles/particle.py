@@ -211,8 +211,11 @@ class Particle:
             xtol=1.0e-10,
         )
 
+        # There are several failure modes here:
+        # - one or both root finders may have failed to converge
+        # - they may have both converged to the same root.
         if not res_apo.converged or not res_peri.converged or res_peri.root >= res_apo.root-1.0e-10:
-            res_peri = scipy.optimize.root_scalar(
+            res_peri_newton = scipy.optimize.root_scalar(
                 fpp,
                 args=(self.epsilon, self.h),
                 fprime=True,
@@ -222,7 +225,7 @@ class Particle:
                 rtol=1.0e-8,
                 xtol=1.0e-10,
             )
-            res_apo = scipy.optimize.root_scalar(
+            res_apo_newton = scipy.optimize.root_scalar(
                 fpp,
                 args=(self.epsilon, self.h),
                 fprime=True,
@@ -233,8 +236,58 @@ class Particle:
                 xtol=1.0e-10,
             )
 
-        self.peri = res_peri.root
-        self.apo = res_apo.root
+            res_apo_secant = scipy.optimize.root_scalar(
+                fpp,
+                args=(self.epsilon, self.h),
+                fprime=True,
+                fprime2=True,
+                x0=apo_zero,
+                method="secant",
+                rtol=1.0e-8,
+                xtol=1.0e-10,
+            )
+            res_peri_secant = scipy.optimize.root_scalar(
+                fpp,
+                args=(self.epsilon, self.h),
+                fprime=True,
+                fprime2=True,
+                x0=peri_zero,
+                method="secant",
+                rtol=1.0e-8,
+                xtol=1.0e-10,
+            )
+
+
+            apos = np.array([res_apo, res_apo_newton, res_apo_secant])
+            peris = np.array([res_peri, res_peri_newton, res_peri_secant])
+            valid_apos = np.array([ res_apo.converged, res_apo_newton.converged, res_apo_secant.converged])
+            valid_peris = np.array([ res_peri.converged, res_peri_newton.converged, res_peri_secant.converged])
+            fail=False
+            if np.any(valid_apos):
+                apo_root = np.max([apo.root for apo in apos[valid_apos]])
+            else:
+                fail=True
+            if np.any(valid_peris):
+                peri_root = np.min([peri.root for peri in peris[valid_peris]])
+            else:
+                fail=True
+
+            if peri_root < apo_root:
+                pass
+            else:
+                fail=True
+                
+            
+            if fail:
+                print("vCartIn:", vCartIn)
+                raise ValueError # several attempts to find a root failed. We could still try brute force..
+            else:
+                self.peri = peri_root
+                self.apo = apo_root
+        else:
+            self.peri = res_peri.root
+            self.apo = res_apo.root
+
         self.X = self.apo / self.peri
         dr = 0.00001  # TODO not used
         self.cRa = (
