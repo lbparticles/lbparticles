@@ -176,18 +176,19 @@ class Particle:
         self.h = R * v
         self.epsilon = 0.5 * (vCart[0] ** 2 + vCart[1] ** 2) - self.psi(R)
 
-        def fpp(r, epsi, hi):
+        def fpp(lnr, epsi, hi):
+            r = np.exp(lnr)
             return (
                 2.0 * epsi + 2.0 * self.psi(r) - hi * hi / (r * r),
-                2.0 * (self.psi.ddr(r) + hi * hi / (r * r * r)),
-                2.0 * (self.psi.ddr2(r) - hi * hi / (r * r * r * r)),
+                r * (2.0 * (self.psi.ddr(r) + hi * hi / (r * r * r))),
+                r*r*2.0 * (self.psi.ddr2(r) - hi * hi / (r * r * r * r)) + r*(2.0 * (self.psi.ddr(r) + hi * hi / (r * r * r))),
             )
 
         rcirc = self.h / self.psi.vc(R)
-        eff, effprime, effpp = fpp(rcirc, self.epsilon, self.h)
+        eff, effprime, effpp = fpp(np.log(rcirc), self.epsilon, self.h)
         curvature = -0.5 * effpp
-        peri_zero = np.min([rcirc / 2.0, R])
-        apo_zero = np.max([rcirc * 2.0, R])
+        peri_zero = np.log(np.min([rcirc / 2.0, R]))
+        apo_zero = np.log(np.max([rcirc * 2.0, R]))
 
         res_peri = scipy.optimize.root_scalar(
             fpp,
@@ -215,6 +216,7 @@ class Particle:
         # - one or both root finders may have failed to converge
         # - they may have both converged to the same root.
         if not res_apo.converged or not res_peri.converged or res_peri.root >= res_apo.root-1.0e-10:
+            print("First attempt failed")
             res_peri_newton = scipy.optimize.root_scalar(
                 fpp,
                 args=(self.epsilon, self.h),
@@ -266,10 +268,12 @@ class Particle:
             if np.any(valid_apos):
                 apo_root = np.max([apo.root for apo in apos[valid_apos]])
             else:
+                apo_root = 0
                 fail=True
             if np.any(valid_peris):
                 peri_root = np.min([peri.root for peri in peris[valid_peris]])
             else:
+                peri_root = 0
                 fail=True
 
             if peri_root < apo_root:
@@ -287,6 +291,9 @@ class Particle:
         else:
             self.peri = res_peri.root
             self.apo = res_apo.root
+
+        self.apo = np.exp(self.apo)
+        self.peri= np.exp(self.peri)
 
         self.X = self.apo / self.peri
         dr = 0.00001  # TODO not used
