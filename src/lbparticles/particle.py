@@ -107,7 +107,6 @@ class Particle:
         
         """
         self.psi = psir
-        self.ordershape = ordershape
         self.ordertime = ordertime
         self.Necc = Necc
         self.nchis = nchis
@@ -328,6 +327,17 @@ class Particle:
         self.e = (self.perU - self.apoU) / (self.perU + self.apoU)
         if quickreturn:
             return
+
+        if ordershape is None:
+            # set ordershape according to the following rule of thumb:
+            # when e<0.9, use 10
+            # when e>0.9999 use 200
+            # in between linearly interpolate between the two in log(1-e) (which goes from -1 to -4)
+            self.ordershape = np.where( self.e<0.9, 10, np.where(self.e>0.9999, 200, int(10. + (200. - 10.)/3. * (-np.log10(1-self.e) - 1.))))
+        else:
+            self.ordershape = ordershape
+
+
 
         self.ubar = 0.5 * (self.perU + self.apoU)
         self.Ubar = 0.5 * (1.0 / self.perU + 1.0 / self.apoU)
