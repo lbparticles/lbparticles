@@ -116,24 +116,31 @@ class Particle:
         self.hvec = np.cross(xCartIn, vCartIn)
         self.hhat = self.hvec / np.sqrt(np.sum(self.hvec * self.hvec))
 
-        v = np.cross(np.array([0, 0, 1.0]), self.hhat)
-        cose = np.dot(self.hhat, np.array([0, 0, 1.0]))
+        #v = np.cross(np.array([0, 0, 1.0]), self.hhat)
+        #cose = np.dot(self.hhat, np.array([0, 0, 1.0]))
 
-        vcross = np.zeros((3, 3))
-        vcross[0, 1] = -v[2]
-        vcross[1, 0] = v[2]
-        vcross[0, 2] = v[1]
-        vcross[2, 0] = -v[1]
-        vcross[1, 2] = -v[0]
-        vcross[2, 1] = v[0]
+        #vcross = np.zeros((3, 3))
+        #vcross[0, 1] = -v[2]
+        #vcross[1, 0] = v[2]
+        #vcross[0, 2] = v[1]
+        #vcross[2, 0] = -v[1]
+        #vcross[1, 2] = -v[0]
+        #vcross[2, 1] = v[0]
         self.zopt = zopt
 
-        if self.zopt == VertOptionEnum.TILT:
-            rot = np.eye(3) + vcross + vcross @ vcross * 1.0 / (1.0 + cose)
-        else:
-            rot = np.eye(3)
+        #if self.zopt == VertOptionEnum.TILT:
+        #    rot = np.eye(3) + vcross + vcross @ vcross * 1.0 / (1.0 + cose)
+        #else:
+        #    rot = np.eye(3)
 
-        self.rot = Rotation.from_matrix(rot)
+        #self.rot = Rotation.from_matrix(rot)
+        if self.zopt == VertOptionEnum.TILT:
+            rot2 = Rotation.align_vectors(self.hhat.reshape((1,3)), np.array([0.,0.,1.0]).reshape((1,3))  )
+            self.rot=rot2[0]
+        else:
+            self.rot = np.eye(3)
+        #import pdb
+        #pdb.set_trace()
 
         xCart = self.rot.apply(xCartIn, inverse=True)
         vCart = self.rot.apply(vCartIn, inverse=True)
