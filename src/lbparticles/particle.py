@@ -137,7 +137,7 @@ class Particle:
             rot2 = Rotation.align_vectors(self.hhat.reshape((1,3)), np.array([0.,0.,1.0]).reshape((1,3))  )
             self.rot=rot2[0]
         else:
-            self.rot = np.eye(3)
+            self.rot = Rotation.from_matrix(np.eye(3))
         #import pdb
         #pdb.set_trace()
 
@@ -203,8 +203,8 @@ class Particle:
             fprime2=True,
             x0=peri_zero,
             method="halley",
-            rtol=1.0e-8,
-            xtol=1.0e-10,
+            rtol=1.0e-11,
+            xtol=1.0e-13,
         )
 
         res_apo = scipy.optimize.root_scalar(
@@ -214,8 +214,8 @@ class Particle:
             fprime2=True,
             x0=apo_zero,
             method="halley",
-            rtol=1.0e-8,
-            xtol=1.0e-10,
+            rtol=1.0e-11,
+            xtol=1.0e-13,
         )
 
         # There are several failure modes here:
@@ -558,9 +558,9 @@ class Particle:
         return r * np.cos(phiabs), r * np.sin(phiabs), z, vx, vy, vz
 
     def xvabs(self, t):
-        res = self.xvinclined(t)
+        res = np.array(self.xvinclined(t))
         if hasattr(self, "rot"):
-            rotated = self.rot.apply([res[:3], res[3:]], inverse=False)
+            rotated = (self.rot.apply(res[:3].T,inverse=False), self.rot.apply(res[3:].T, inverse=False) )
         else:
             rotated = (res[:3], res[3:])
         return rotated[0], rotated[1]
@@ -831,7 +831,11 @@ class Particle:
 
     def zvz(self, t):
         if self.zopt == VertOptionEnum.TILT:
-            return 0.0, 0.0
+            #return 0.0, 0.0
+            if hasattr(t,'__len__'):
+                return np.zeros(len(t)), np.zeros(len(t))
+            else:
+                return 0., 0.
 
         tPeri = t + self.tperiIC
         nu_now = self.nu(t)
@@ -1027,8 +1031,13 @@ class Particle:
         r, mphi = self.emphi(eta)
         phiabs = mphi / self.m0 + (self.thetaIC - self.phiIC)
 
+        arg = 2 * self.epsilon - self.h * self.h / (r * r) + 2.0 * self.psi(r)
+        # failure mode here: arg~ -1e-10. Numerically-determined apo- and peri-centre 
+        # are very slightly off and the current time happens to be exactly as this incorrect peri- or apo-centre.
+        #if np.any(arg<0):
+        #    pdb.set_trace()
         rdot = np.sqrt(
-            2 * self.epsilon - self.h * self.h / (r * r) + 2.0 * self.psi(r)
+                np.clip(arg,0,None)
         ) * np.sign(np.sin(chi))
         vphi = self.h / r
 
