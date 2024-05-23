@@ -203,8 +203,8 @@ class Particle:
             fprime2=True,
             x0=peri_zero,
             method="halley",
-            rtol=1.0e-11,
-            xtol=1.0e-13,
+            rtol=1.0e-8,
+            xtol=1.0e-10,
         )
 
         res_apo = scipy.optimize.root_scalar(
@@ -214,8 +214,8 @@ class Particle:
             fprime2=True,
             x0=apo_zero,
             method="halley",
-            rtol=1.0e-11,
-            xtol=1.0e-13,
+            rtol=1.0e-8,
+            xtol=1.0e-10,
         )
 
         # There are several failure modes here:
