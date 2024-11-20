@@ -7,6 +7,7 @@ extensions = [
     "myst_nb",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
+source_suffix=[".rst",".md"]
 master_doc = "index"
 
 # General information about the project.
