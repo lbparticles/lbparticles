@@ -14,7 +14,6 @@ computed in constant time.
 pages/install
 examples/quickstart
 pages/implement_a_potential
-examples/benchmark
 pages/api
 ```
 
