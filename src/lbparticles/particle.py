@@ -517,7 +517,7 @@ class Particle:
         nulg = 2.0 / self.k - 1.0
         zlg = 1.0 / np.sqrt(1 - self.e * self.e)
         dz = zlg * 1.0e-5
-        etaIC = np.arccos((R**-self.k / self.ubar - 1.0) / self.e)
+        etaIC = np.arccos(np.clip((R**-self.k / self.ubar - 1.0) / self.e,-1.0,1.0))
         if u > 0:
             self.etaIC = etaIC
         else:
@@ -527,7 +527,7 @@ class Particle:
 
         self.thetaIC = theta
         chiIC = np.arccos(
-            (1.0 - R**self.k / (0.5 * (1.0 / self.apoU + 1.0 / self.perU))) / self.e
+            np.clip((1.0 - R**self.k / (0.5 * (1.0 / self.apoU + 1.0 / self.perU))) / self.e,-1,1)
         )
         if u > 0:
             self.chiIC = chiIC
@@ -541,7 +541,7 @@ class Particle:
             )
 
         if zopt == VertOptionEnum.FOURIER:
-            self.initialize_z_fourier(40)  # TODO allow user to adjust this number
+            self.initialize_z_fourier(80)  # TODO allow user to adjust this number
 
         if zopt == VertOptionEnum.INTEGRATE:
             self.initialize_z_numerical(rtol=rtolz, atol=atolz, Neval=Nevalz)

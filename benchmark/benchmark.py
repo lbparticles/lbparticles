@@ -2,6 +2,8 @@ from lbparticles import Precomputer, Particle, HernquistPotential, VertOptionEnu
 
 import time
 import matplotlib.pyplot as plt
+import matplotlib.colors as mpcolors
+import matplotlib.cm
 import scipy.integrate
 import scipy.optimize
 import numpy as np
@@ -78,14 +80,17 @@ class benchmark_groundtruth:
 
 
         tim = timer()
-        for i,t in enumerate(self.ts):
-            if i>0:
-                res = scipy.integrate.solve_ivp( particle_ivp2, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=2.3e-14, atol=1.0e-14, method='DOP853', args=(self.psir,))
-                self.partarray[:,i] = res.y[:,-1]
-                tprev = t
+
+        res = scipy.integrate.solve_ivp( particle_ivp2, [np.min(self.ts),np.max(self.ts)], self.partarray[:,0], vectorized=True, rtol=2.3e-13, atol=1.0e-11, method='DOP853', args=(self.psir,), t_eval=self.ts)
+        self.partarray[:,:] = res.y[:,:]
+
+#        for i,t in enumerate(self.ts):
+#            if i>0:
+#                res = scipy.integrate.solve_ivp( particle_ivp2, [tprev,t], self.partarray[:,i-1], vectorized=True, rtol=2.3e-13, atol=1.0e-11, method='DOP853', args=(self.psir,))
+#                self.partarray[:,i] = res.y[:,-1]
+#                tprev = t
         tim.tick('run')
         self.runtime = tim.timeto('run')
-
 
 class particle_benchmarker:
     def __init__(self, groundtruth,identifier,args,kwargs):
@@ -101,6 +106,7 @@ class particle_benchmarker:
         self.rerrs = {}
         self.phierrs = {}
         self.zerrs = {}
+        self.zmax = np.max(np.abs(groundtruth.partarray[2,:])) # rough estimate of the maximum height the particle reaches.
     def initialize_particle(self):
         tim = timer()
         self.part = Particle(copy.deepcopy(self.groundtruth.xcart), copy.deepcopy(self.groundtruth.vcart), *self.args, **self.kwargs)
@@ -218,11 +224,464 @@ class integration_benchmarker:
 
 
 
-def benchmark():
-    #psir = logpotential(220.0)
-    #psirr = HernquistPotential(20000, vcirc=220)
-    psirr = HernquistPotential.mass(20000, 2.0e12)
 
+
+
+def benchmark2():
+    import galpy.potential
+    import astropy.units as units
+    mw2014 = galpy.potential.MWPotential2014
+    psirr = galpyPotential(mw2014, units, galpy.potential)
+    nu = galpyFreq(mw2014, units, galpy.potential)
+    dlnnudr = numericalFreqDeriv(nu)
+    print("potential set up 1")
+    psir = PotentialWrapper( psirr, nur=nu, dlnnudr=dlnnudr)
+    print("potential set up 2")
+    xCart = np.array([8100.0, 0.0, 21.0])
+    vCart = np.array([0.0, 219.0, 10.0])
+    #ordertime=5
+    #ordershape=14
+    ts = np.linspace( 0, 10000.0, 1000) # 10 Gyr
+
+    lbpre = Precomputer.load('../big_10_1000_alpha2p2_lbpre.pickle')
+    print("done precomputing")
+
+    Npart = 40
+
+    argslist = []
+    kwargslist = []
+    ids = []
+    simpleids = []
+    colors = []
+    markers=[]
+
+
+    # Things to vary:
+    # nchis -- number of points in the interpolation
+    # ordertime
+    # ordershape
+
+
+    nchis_default = 300
+    ordertime_default = 8
+    ordershape_default = 15
+
+    nchis_var = np.array([ 10, 30, 100, 300, 1000])
+    ordertimes_var = np.arange(1,10,1)
+    ordershapes_var = np.array([1,3,10,31,100])
+
+    cmap_chi_base = plt.get_cmap('Purples')
+    cmap_chi = mpcolors.LinearSegmentedColormap.from_list('cmap_chi', cmap_chi_base(np.linspace(0.1,1.0,len(nchis_var))), N=len(nchis_var) ) 
+
+    cmap_ordertimes_base = plt.get_cmap('Blues')
+    cmap_ordertimes = mpcolors.LinearSegmentedColormap.from_list('cmap_ordertimes', cmap_ordertimes_base(np.linspace(0.1,1.0,len(ordertimes_var))), N=len(ordertimes_var) ) 
+
+    cmap_ordershapes_base = plt.get_cmap('Reds')
+    cmap_ordershapes = mpcolors.LinearSegmentedColormap.from_list('cmap_ordershapes', cmap_ordershapes_base(np.linspace(0.1,1.0,len(ordershapes_var))), N=len(ordershapes_var) ) 
+
+    
+
+    for i,nchi in enumerate(nchis_var):
+        argslist.append( (psir, lbpre) ) 
+        kwargslist.append( {'ordershape':ordershape_default, 'ordertime':ordertime_default, 'zopt':VertOptionEnum.FOURIER, 'nchis':nchi} )
+        ids.append( r'$n_\chi='+str(nchi)+r'$' )
+        simpleids.append('nchi'+str(nchi))
+        colors.append(cmap_chi((0.5+float(i))/(len(nchis_var))))
+        markers.append( 's' )
+
+    for i,ordertime in enumerate(ordertimes_var):
+        argslist.append( (psir, lbpre) ) 
+        kwargslist.append( {'ordershape':ordershape_default, 'ordertime':ordertime, 'zopt':VertOptionEnum.FOURIER, 'nchis':nchis_default} )
+        ids.append( r'$N_\mathrm{time}='+str(ordertime)+r'$' )
+        simpleids.append('ordertime'+str(ordertime))
+        colors.append(cmap_ordertimes((0.5+float(i))/(len(ordertimes_var))))
+        markers.append( 'o' )
+
+    for i,ordershape in enumerate(ordershapes_var):
+        argslist.append( (psir, lbpre) ) 
+        kwargslist.append( {'ordershape':ordershape, 'ordertime':ordertime_default, 'zopt':VertOptionEnum.FOURIER, 'nchis':nchis_default} )
+        ids.append( r'$N_\mathrm{shape}='+str(ordershape)+r'$' )
+        simpleids.append('ordershape'+str(ordershape))
+        colors.append(cmap_ordershapes((0.5+float(i))/(len(ordershapes_var))))
+        markers.append( 'd' )
+
+    import pdb
+
+
+
+
+    results = np.zeros( (len(argslist),Npart) ,dtype=object) # 10 configurations to test, with Npart orbits.
+    dvphis = np.linspace( - 200.0, 0.0, Npart)
+
+    for ii in tqdm(range(Npart)):
+        stri = str(ii).zfill(3)
+
+        #dv = np.random.randn(3)*25.0
+        dv = np.array([1,dvphis[ii],0])
+        vCartThis = vCart + dv
+        
+        gt = benchmark_groundtruth( ts, xCart, vCartThis, psir )
+        gt.run()
+
+        for j in range(len(argslist)):
+            if 'ordershape' in kwargslist[j].keys():
+                # these are the options for a particlelb, so we need to use a particle_benchmarker. This logic could probably be put into benchmarker_factory class.
+                results[j,ii] = particle_benchmarker(gt,ids[j],argslist[j],kwargslist[j])
+                results[j,ii].initialize_particle()
+                results[j,ii].evaluate_particle()
+                results[j,ii].estimate_errors([9000,10000],'lastgyr')
+                results[j,ii].estimate_errors([200,300],'200myr')
+                results[j,ii].estimate_errors([900,1000],'1gyr')
+
+                if results[j,ii].rerrs['lastgyr'] > 0.1:
+
+                    pass
+#                    part = results[j,ii].part
+#                    if part.ordertime==ordertime and part.nchis>30:
+#                        # now it is surprising
+#                        t_terms, nu_terms = lbpre.get_t_terms(part.k, part.e, maxorder=part.ordertime+2, \
+#                                includeNu=False, nchis=part.nchis, Necc=part.Necc, debug=True )
+
+            else:
+                results[j,ii] = integration_benchmarker(gt,ids[j],argslist[j],kwargslist[j])
+                results[j,ii].run()
+                results[j,ii].estimate_errors([9000,10000],'lastgyr', psir=psir)
+                results[j,ii].estimate_errors([200,300],'200myr')
+                results[j,ii].estimate_errors([900,1000],'1gyr', psir=psir)
+                results[j,ii].errs_at_fixed_time(0.025, 'fixedtime', rtol=0.2)
+
+
+
+    fig,ax = plt.subplots(ncols=3, figsize=(9,5.))
+    for j in range(len(argslist)):
+        print("eccentricities: ", [results[j,ii].part.e for ii in range(Npart)] )
+        x= np.array([results[j,ii].part.e for ii in range(Npart)])
+        y = [results[j,ii].rerrs['lastgyr']/(results[j,ii].part.apo-results[j,ii].part.peri) for ii in range(Npart)]
+        ax[0].plot( x, y, c=colors[j], label=ids[j], marker=markers[j], lw=1, alpha=0.95, markeredgecolor='k' )
+        ax[1].plot( x, [results[j,ii].phierrs['lastgyr']/(results[j,ii].part.apo-results[j,ii].part.peri) for ii in range(Npart)], c=colors[j], label=ids[j], marker=markers[j], lw=1, alpha=0.95, markeredgecolor='k' )
+        ax[2].plot( x, [results[j,ii].zerrs['lastgyr']/results[j,ii].zmax for ii in range(Npart)], c=colors[j], label=ids[j], marker=markers[j], lw=1, alpha=0.95, markeredgecolor='k' )
+
+    ax[0].set_xlabel('e')
+    ax[1].set_xlabel('e')
+    ax[2].set_xlabel('e')
+    ax[0].set_yscale('log')
+    ax[1].set_yscale('log')
+    ax[2].set_yscale('log')
+    ax[0].set_ylim(1.0e-11, 10.0)
+    ax[1].set_ylim(1.0e-11, 10.0)
+    ax[2].set_ylim(1.0e-11, 10.0)
+    ax[0].set_ylabel(r'$\mathrm{RMS}(r-r_\mathrm{truth})/(r_\mathrm{apo}-r_\mathrm{peri})$')
+    ax[1].set_ylabel(r'$\mathrm{RMS}(r\Delta\phi)/(r_\mathrm{apo}-r_\mathrm{peri})$')
+    ax[2].set_ylabel(r'$\mathrm{RMS}(z-z_\mathrm{truth})/z_\mathrm{max}$')
+    ax[0].set_title('r')
+    ax[1].set_title(r'$\phi$')
+    ax[2].set_title('z')
+
+
+    fig.subplots_adjust(bottom=0.42, wspace=0.48)
+    cax1 = fig.add_axes([0.1, 0.25, 0.77, 0.02])
+    cax2 = fig.add_axes([0.1, 0.16, 0.77, 0.02])
+    cax3 = fig.add_axes([0.1, 0.07, 0.77, 0.02])
+
+    sc1 = cax1.scatter([1.05],[0.5],c=[0.7], vmin=0, vmax=1, marker='s', edgecolors='k', cmap=cmap_chi, clip_on=False)
+    cbar1 = plt.colorbar( sc1, cax=cax1, orientation='horizontal') 
+    cbar1.set_ticks( (np.arange(len(nchis_var))+0.5)/float(len(nchis_var)-1+0.5+0.5), labels=[str(nchi) for nchi in nchis_var] )
+    #cbar1.set_label(r'$N_\chi$', x=1.065, y=0)
+    cax1.text(1.065, 0.5, r'$N_\chi$', va='center')
+
+    sc2 = cax2.scatter([1.05],[0.5],c=[0.7], vmin=0, vmax=1, marker='o', edgecolors='k',cmap=cmap_ordertimes, clip_on=False)
+    cbar2 = plt.colorbar( sc2, cax=cax2, orientation='horizontal') 
+    cbar2.set_ticks( (np.arange(len(ordertimes_var))+0.5)/float(len(ordertimes_var)-1+0.5+0.5), labels=[str(ordertime) for ordertime in ordertimes_var] )
+    #cbar2.set_label(r'$N_\mathrm{time}$', x=1.065, y=2)
+    cax2.text(1.065, 0.5, r'$N_\mathrm{time}$', va='center')
+
+    sc3 = cax3.scatter([1.05],[0.5],c=[0.7], vmin=0, vmax=1, marker='d', edgecolors='k',cmap=cmap_ordershapes, clip_on=False)
+    cbar3 = plt.colorbar( sc3, cax=cax3, orientation='horizontal') 
+    cbar3.set_ticks( (np.arange(len(ordershapes_var))+0.5)/float(len(ordershapes_var)-1+0.5+0.5), labels=[str(ordershape) for ordershape in ordershapes_var] )
+    #cbar3.set_label(r'$N_\mathrm{shape}$', x=1.065, y=10)
+    cax3.text(1.065, 0.5, r'$N_\mathrm{shape}$', va='center')
+
+    fig.savefig('all_errors.png', dpi=300)
+    plt.close(fig)
+
+    return
+
+
+
+    alpha = 0.9
+    siz = 80
+    fig,ax = plt.subplots(figsize=(12,12))
+    for j in range(len(argslist)):
+        if not results[j,0].isparticle():
+            ax.scatter( [results[j,ii].runtimes['lastgyr'] for ii in range(Npart)], [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=1, alpha=alpha, edgecolors='silver' )
+            ax.scatter( [results[j,ii].runtimes['200myr'] for ii in range(Npart)], [results[j,ii].rerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='P', lw=1, alpha=alpha, edgecolors='silver' )
+            ax.scatter( [results[j,ii].runtimes['1gyr'] for ii in range(Npart)], [results[j,ii].rerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='silver' )
+        else:
+            if 'ordertime' in kwargslist[j].keys():
+                if (kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0) and results[j,ii].part.ordershape==ordershape :
+                    ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=1, alpha=alpha,edgecolors='k', s=siz )
+                    ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].rerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='P', lw=1, alpha=alpha, edgecolors='k', s=siz )
+                    ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].rerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='k', s=siz )
+    ax.set_xlabel(r'Evaluation Time (s)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel(r'RMS Error in r (pc)')
+    ax.legend()
+    ax2 = ax.twinx()
+    ax2.scatter([0],[0], c='k', marker='o', label='10 Gyr')
+    ax2.scatter([0],[0], c='k', marker='s', label='1 Gyr')
+    ax2.scatter([0],[0], c='k', marker='P', label='0.2 Gyr')
+    ax2.get_yaxis().set_visible(False)
+    ax2.legend(loc=(0.85,0.04))
+
+    ax3 = ax.twinx()
+    ax3.scatter([0],[0], c='r', marker='o', edgecolors='silver', label='Integrator')
+    ax3.scatter([0],[0], c='r', marker='o', edgecolors='k', label=r'LBParticle', s=siz)
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.03,0.05))
+
+    fig.savefig('benchmark_rt.png', dpi=300)
+    plt.close(fig)
+
+    fig,ax = plt.subplots(figsize=(12,12))
+    for j in range(len(argslist)):
+        if not results[j,0].isparticle():
+            ax.scatter( [results[j,ii].runtimes['lastgyr'] for ii in range(Npart)], [results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=1, alpha=alpha, edgecolors='silver' )
+            ax.scatter( [results[j,ii].runtimes['200myr'] for ii in range(Npart)], [results[j,ii].zerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='P', lw=1, alpha=alpha, edgecolors='silver' )
+            ax.scatter( [results[j,ii].runtimes['1gyr'] for ii in range(Npart)], [results[j,ii].zerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='silver' )
+        else:
+            if 'ordertime' in kwargslist[j].keys():
+                if (kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0) and (kwargslist[j]['ordershape'] == ordershape):
+                    ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=1, alpha=alpha,edgecolors='k', s=siz )
+                    ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['200myr'] for ii in range(Npart)], c=colors[j], marker='P', lw=1, alpha=alpha, edgecolors='k', s=siz )
+                    ax.scatter( [results[j,ii].runtime() for ii in range(Npart)], [results[j,ii].zerrs['1gyr'] for ii in range(Npart)], c=colors[j], marker='s', lw=1, alpha=alpha, edgecolors='k', s=siz )
+    ax.set_xlabel(r'Evaluation Time (s)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel(r'RMS Error in z (pc)')
+    ax.legend()
+    ax2 = ax.twinx()
+    ax2.scatter([0],[0], c='k', marker='o', label='10 Gyr')
+    ax2.scatter([0],[0], c='k', marker='s', label='1 Gyr')
+    ax2.scatter([0],[0], c='k', marker='P', label='0.2 Gyr')
+    ax2.get_yaxis().set_visible(False)
+    ax2.legend(loc=(0.85,0.04))
+
+    ax3 = ax.twinx()
+    ax3.scatter([0],[0], c='r', marker='o', edgecolors='silver', label='Integrator')
+    ax3.scatter([0],[0], c='r', marker='o', edgecolors='k', label=r'LBParticle', s=80)
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.03,0.05))
+
+    fig.savefig('benchmark_zt.png', dpi=300)
+    plt.close(fig)
+
+
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            pass
+        else:
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].herrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='o', lw=0, alpha=alpha, label=ids[j] )
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].epserrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='s', lw=0, alpha=alpha )
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].apoerrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='<', lw=0, alpha=alpha )
+            ax.scatter([results[j,ii].zerrs['lastgyr'] for ii in range(Npart)], [np.abs(results[j,ii].perierrs['lastgyr']) for ii in range(Npart)], c=colors[j], marker='>', lw=0, alpha=alpha )
+    ax.set_xlabel(r'RMS Error in z (pc)')
+    ax.set_ylabel(r'Errors in conserved quantities')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.legend(loc='lower right')
+    ax2 = ax.twinx()
+    ax2.scatter([0],[0], c='k', marker='o', label='h')
+    ax2.scatter([0],[0], c='k', marker='s', label=r'$\epsilon$')
+    ax2.scatter([0],[0], c='k', marker='>', label='Peri')
+    ax2.scatter([0],[0], c='k', marker='<', label='Apo')
+    ax2.get_yaxis().set_visible(False)
+    ax2.legend(loc='upper left')
+    fig.savefig('benchmark_zh.png')
+    plt.close(fig)
+
+
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            pass
+        else:
+            ax.scatter([results[j,ii].fixed_time_ages['fixedtime'] for ii in range(Npart)], [results[j,ii].zerrs['fixedtime'] for ii in range(Npart)], c=colors[j], label=ids[j], marker='o', lw=0, alpha=alpha)
+    ax.set_xlabel('Time Integrated at Fixed Cost (Myr)')
+    ax.set_ylabel('RMS Error in z (pc)')
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    zep = [results[0,ii].zerrs['lastgyr'] for ii in range(Npart)]
+    ax.axhline( np.mean(zep)+np.std(zep) )
+    ax.axhline( np.mean(zep)-np.std(zep) )
+    ax.legend()
+    fig.savefig('benchmark_fixedt.png')
+    plt.close(fig)
+
+    fig,ax = plt.subplots(figsize=(12,12))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            if 'ordertime' in kwargslist[j].keys():
+                if kwargslist[j]['ordertime'] == ordertime or kwargslist[j]['ordertime']<0 :
+                    dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
+                    #sizes = 90+np.log10(sizes)*10
+                    if results[j,0].part.nchis == 20:
+                        marker='P'
+                    elif results[j,0].part.nchis == 100:
+                        marker='D'
+                    elif results[j,0].part.nchis == 300:
+                        marker='s'
+                    else:
+                        marker='o'
+                    sizes = np.array([results[j,ii].part.e for ii in range(Npart)])*100 + 30
+                    ax.scatter( dks , [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha,edgecolors='k', s=sizes )
+        else:
+            pass
+    ax.set_xlabel(r'$\Delta k$')
+    ax.set_ylabel('RMS Error in r (pc)')
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    ax.legend()
+
+    ax3 = ax.twinx()
+    ax3.scatter([0],[0], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
+    ax3.scatter([0],[0], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
+    ax3.scatter([0],[0], c='k', marker='s', edgecolors='k', label=r'$n_\chi=300$')
+    ax3.scatter([0],[0], c='k', marker='o', edgecolors='k', label=r'Other')
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.05,0.8))
+
+    fig.savefig('benchmark_ekr.png')
+    plt.close(fig)
+
+
+    fig,ax = plt.subplots(figsize=(12,12))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            if 'ordertime' in kwargslist[j].keys():
+                if results[j,ii].part.zopt == VertOptionEnum.INTEGRATE:
+                    des = np.array([dist_to_nearest_e(lbpre, results[j,ii].part.e) for ii in range(Npart)] )
+                    sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
+                    dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
+                    #sizes = 90+np.log10(sizes)*10
+                    if results[j,0].part.nchis == 20:
+                        marker='P'
+                    elif results[j,0].part.nchis == 100:
+                        marker='D'
+                    elif results[j,0].part.nchis == 1000:
+                        marker='s'
+                    else:
+                        marker='o'
+                    ax.scatter( np.abs(des), [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha, edgecolors='k', s=sizes)
+        else:
+            pass
+    ax.set_xlabel(r'$|\Delta e|$')
+    ax.set_ylabel('RMS Error in r (pc)')
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    ax.legend()
+
+    ax3 = ax.twinx()
+    ax3.scatter([0],[0], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
+    ax3.scatter([0],[0], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
+    ax3.scatter([0],[0], c='k', marker='s', edgecolors='k', label=r'$n_\chi=1000$')
+    ax3.scatter([0],[0], c='k', marker='o', edgecolors='k', label=r'Other')
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.03,0.9))
+
+    fig.savefig('benchmark_der.png')
+    plt.close(fig)
+
+
+
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            if 'ordertime' in kwargslist[j].keys():
+                if results[j,ii].part.zopt == VertOptionEnum.INTEGRATE and results[j,ii].part.ordershape==ordershape:
+                    des = np.array([dist_to_nearest_e(lbpre, results[j,ii].part.e) for ii in range(Npart)] )
+                    sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
+                    dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
+                    #sizes = 90+np.log10(sizes)*10
+                    if results[j,0].part.nchis == 20:
+                        marker='P'
+                    elif results[j,0].part.nchis == 100:
+                        marker='D'
+                    elif results[j,0].part.nchis == 300:
+                        marker='s'
+                    else:
+                        marker='o'
+                    ax.scatter( np.array([kwargslist[j]['ordertime']]*Npart)+np.random.randn(Npart)*0.05, [results[j,ii].rerrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha, edgecolors='k', s=sizes)
+                    print("Making benchmark_order - ", kwargslist[j], colors[j], simpleids[j] )
+        else:
+            pass
+    ax.set_xlabel(r'Time Order')
+    ax.set_ylabel('RMS Error in r (pc)')
+    ax.set_yscale('log')
+    #ax.set_xscale('log')
+    ax.legend()
+
+    ax3 = ax.twinx()
+    ax3.scatter([-100],[-100], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
+    ax3.scatter([-100],[-100], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
+    ax3.scatter([-100],[-100], c='k', marker='s', edgecolors='k', label=r'$n_\chi=300$')
+    ax3.scatter([-100],[-100], c='k', marker='o', edgecolors='k', label=r'Other')
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.03,0.04))
+
+    ax.set_xlim(-0.3, 8.3)
+
+    fig.savefig('benchmark_order.png')
+    plt.close(fig)
+
+    
+    fig,ax = plt.subplots(figsize=(8,8))
+    for j in range(len(argslist)):
+        if results[j,0].isparticle():
+            if 'ordershape' in kwargslist[j].keys():
+                if results[j,ii].part.zopt == VertOptionEnum.INTEGRATE and results[j,ii].part.ordertime==ordertime:
+                    des = np.array([dist_to_nearest_e(lbpre, results[j,ii].part.e) for ii in range(Npart)] )
+                    sizes =  np.abs(kwargslist[j]['ordertime']) *10 + 40
+                    dks = np.array([dist_to_nearest_k(lbpre, results[j,ii].part.k) for ii in range(Npart)]) # typically will be of order 0.0005
+                    #sizes = 90+np.log10(sizes)*10
+                    if results[j,0].part.nchis == 20:
+                        marker='P'
+                    elif results[j,0].part.nchis == 100:
+                        marker='D'
+                    elif results[j,0].part.nchis == 300:
+                        marker='s'
+                    else:
+                        marker='o'
+                    ax.scatter( np.array([kwargslist[j]['ordershape']]*Npart)+np.random.randn(Npart)*0.05, [results[j,ii].phierrs['lastgyr'] for ii in range(Npart)], c=colors[j], label=ids[j], marker=marker, lw=1, alpha=alpha, edgecolors='k', s=sizes)
+                    #print("Making benchmark_order - ", kwargslist[j], colors[j], simpleids[j] )
+        else:
+            pass
+    ax.set_xlabel(r'Shape Order')
+    ax.set_ylabel('RMS Error in $r\phi$ (pc)')
+    ax.set_yscale('log')
+    #ax.set_xscale('log')
+    ax.legend()
+
+    ax3 = ax.twinx()
+    ax3.scatter([-100],[-100], c='k', marker='P', edgecolors='k', label=r'$n_\chi=20$')
+    ax3.scatter([-100],[-100], c='k', marker='D', edgecolors='k', label=r'$n_\chi=100$')
+    ax3.scatter([-100],[-100], c='k', marker='s', edgecolors='k', label=r'$n_\chi=300$')
+    ax3.scatter([-100],[-100], c='k', marker='o', edgecolors='k', label=r'Other')
+    ax3.get_yaxis().set_visible(False)
+    ax3.legend(loc=(0.03,0.04))
+
+    ax.set_xlim(-0.3, 30.3)
+
+    fig.savefig('benchmark_ordershape.png')
+    plt.close(fig)
+
+
+
+
+
+
+def benchmark():
     import galpy.potential
     import astropy.units as units
     mw2014 = galpy.potential.MWPotential2014
@@ -754,5 +1213,5 @@ def dist_to_nearest_e(lbpre, e):
 
 
 if __name__=='__main__':
-    benchmark()
+    benchmark2()
 
